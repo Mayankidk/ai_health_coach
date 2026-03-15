@@ -46,6 +46,7 @@ dependencies:
   path_provider: ^2.1.5
   flutter_local_notifications: ^19.5.0
   health: ^13.0.0
+  flutter_timezone: ^2.0.0
   flutter_chat_ui: ^1.6.15
   flutter_chat_types: ^3.6.2
   dio: ^5.7.0
