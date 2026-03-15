@@ -1,16 +1,40 @@
-# ai_health_coach_app
+# Neuralis
+Elite AI Health Coach powered by Gemini.
 
-A new Flutter project.
+## 🚀 Overview
+Neuralis is a state-of-the-art health companion that transforms your data into actionable wellness strategies. By leveraging Google's Gemini AI, it analyzes your activity, sleep, and nutrition to generate a personalized **Daily Plan** tailored to your peak performance.
 
-## Getting Started
+## ✨ Key Features
+- **🧠 AI Insights**: Personalized health recommendations based on your unique data.
+- **🏃 Health Sync**: Seamless integration with wearable data (Steps, Sleep, Calories).
+- **📅 Daily AI Planning**: A dynamic schedule generated every morning with specific activities.
+- **💬 AI Chat**: Direct interaction with your health memories and data via Gemini.
+- **📈 Pro-active Nudges**: Intelligent notifications to keep you on track.
 
-This project is a starting point for a Flutter application.
+## 🛠️ Tech Stack
+- **Frontend**: [Flutter](https://flutter.dev) (Cross-platform)
+- **Backend/External**: [Supabase](https://supabase.com) (Cloud) & [Hive](https://pub.dev/packages/hive) (Local)
+- **AI Engine**: [Google Gemini Pro](https://deepmind.google/technologies/gemini/)
+- **State Management**: BLoC / Provider
 
-A few resources to get you started if this is your first Flutter project:
+## 🏗️ Getting Started
+1. **Clone the repo**:
+   ```bash
+   git clone https://github.com/Mayankidk/ai_health_coach.git
+   ```
+2. **Setup environment**:
+   Create a `.env` file in the root with your API keys.
+3. **Install dependencies**:
+   ```bash
+   flutter pub get
+   ```
+4. **Run the app**:
+   ```bash
+   flutter run
+   ```
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+## 🎓 Project Context
+This software was developed as a comprehensive solution for personal wellness, focusing on the intersection of **Artificial Intelligence** and **Personal Health Management**.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+---
+*Built with ❤️ for a healthier future.*
