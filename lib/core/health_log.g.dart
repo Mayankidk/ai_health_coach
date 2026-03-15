@@ -17,6 +17,7 @@ class HealthLogAdapter extends TypeAdapter<HealthLog> {
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
     return HealthLog(
+      id: fields[3] as String?,
       content: fields[0] as String,
       isActive: fields[1] as bool,
       createdAt: fields[2] as DateTime,
@@ -26,13 +27,15 @@ class HealthLogAdapter extends TypeAdapter<HealthLog> {
   @override
   void write(BinaryWriter writer, HealthLog obj) {
     writer
-      ..writeByte(3)
+      ..writeByte(4)
       ..writeByte(0)
       ..write(obj.content)
       ..writeByte(1)
       ..write(obj.isActive)
       ..writeByte(2)
-      ..write(obj.createdAt);
+      ..write(obj.createdAt)
+      ..writeByte(3)
+      ..write(obj.id);
   }
 
   @override

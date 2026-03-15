@@ -63,19 +63,22 @@ class PlanItemAdapter extends TypeAdapter<PlanItem> {
       type: fields[0] as String,
       description: fields[1] as String,
       details: fields[2] as String,
+      isCompleted: fields[3] == null ? false : fields[3] as bool,
     );
   }
 
   @override
   void write(BinaryWriter writer, PlanItem obj) {
     writer
-      ..writeByte(3)
+      ..writeByte(4)
       ..writeByte(0)
       ..write(obj.type)
       ..writeByte(1)
       ..write(obj.description)
       ..writeByte(2)
-      ..write(obj.details);
+      ..write(obj.details)
+      ..writeByte(3)
+      ..write(obj.isCompleted);
   }
 
   @override

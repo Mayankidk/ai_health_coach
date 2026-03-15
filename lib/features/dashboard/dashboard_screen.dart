@@ -1,4 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import '../chat/chat_screen.dart';
 import '../plans/daily_plan_screen.dart';
 import '../chat/memory_vault_screen.dart';
@@ -26,72 +29,97 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _pages,
-      ),
-      bottomNavigationBar: NavigationBarTheme(
-        data: NavigationBarThemeData(
-          height: 67,
-          indicatorColor: const Color(0xFF006B6B).withAlpha(30),
-          labelTextStyle: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected)) {
-              return const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF006B6B),
-              );
-            }
-            return TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: Colors.grey[600],
-            );
-          }),
-          iconTheme: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected)) {
-              return const IconThemeData(
-                size: 26,
-                color: Color(0xFF006B6B),
-              );
-            }
-            return IconThemeData(
-              size: 26,
-              color: Colors.grey[700],
-            );
-          }),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+
+        if (kDebugMode) {
+          print("DashboardScreen: Back button pressed. Current index: $_currentIndex");
+        }
+
+        if (_currentIndex != 0) {
+          setState(() => _currentIndex = 0);
+        } else {
+          // Force exit the app if on the first tab
+          if (kDebugMode) {
+            print("DashboardScreen: Attempting to exit app via hard quit...");
+          }
+          
+          // SystemNavigator.pop() is standard, but on some Android versions 
+          // it just backgrounds. exit(0) is the most definitive way to stop the process.
+          // We add a tiny delay to allow the system to process the event.
+          await Future.delayed(const Duration(milliseconds: 100));
+          exit(0);
+        }
+      },
+      child: Scaffold(
+        body: IndexedStack(
+          index: _currentIndex,
+          children: _pages,
         ),
-        child: NavigationBar(
-          selectedIndex: _currentIndex,
-          onDestinationSelected: (index) => setState(() => _currentIndex = index),
-          destinations: [
-            const NavigationDestination(
-              icon: Icon(Icons.dashboard_outlined),
-              selectedIcon: Icon(Icons.dashboard),
-              label: "Home",
-            ),
-            const NavigationDestination(
-              icon: Icon(Icons.calendar_today_outlined),
-              selectedIcon: Icon(Icons.calendar_today),
-              label: "Plan",
-            ),
-            const NavigationDestination(
-              icon: Icon(Icons.add_box_outlined, size: 30),
-              selectedIcon: Icon(Icons.add_box_rounded, size: 30),
-              label: "Memory",
-            ),
-            const NavigationDestination(
-              icon: Icon(Icons.chat_outlined),
-              selectedIcon: Icon(Icons.chat),
-              label: "Coach",
-            ),
-            const NavigationDestination(
-              icon: Icon(Icons.person_outline, size: 28),
-              selectedIcon: Icon(Icons.person, size: 28),
-              label: "Profile",
-            ),
-          ],
+        bottomNavigationBar: NavigationBarTheme(
+          data: NavigationBarThemeData(
+            height: 67,
+            indicatorColor: const Color(0xFF006B6B).withAlpha(30),
+            labelTextStyle: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.selected)) {
+                return const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF006B6B),
+                );
+              }
+              return TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey[600],
+              );
+            }),
+            iconTheme: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.selected)) {
+                return const IconThemeData(
+                  size: 26,
+                  color: Color(0xFF006B6B),
+                );
+              }
+              return IconThemeData(
+                size: 26,
+                color: Colors.grey[700],
+              );
+            }),
+          ),
+          child: NavigationBar(
+            selectedIndex: _currentIndex,
+            onDestinationSelected: (index) => setState(() => _currentIndex = index),
+            destinations: [
+              const NavigationDestination(
+                icon: Icon(Icons.dashboard_outlined),
+                selectedIcon: Icon(Icons.dashboard),
+                label: "Home",
+              ),
+              const NavigationDestination(
+                icon: Icon(Icons.calendar_today_outlined),
+                selectedIcon: Icon(Icons.calendar_today),
+                label: "Plan",
+              ),
+              const NavigationDestination(
+                icon: Icon(Icons.add_box_outlined, size: 30),
+                selectedIcon: Icon(Icons.add_box_rounded, size: 30),
+                label: "Memory",
+              ),
+              const NavigationDestination(
+                icon: Icon(Icons.chat_outlined),
+                selectedIcon: Icon(Icons.chat),
+                label: "Coach",
+              ),
+              const NavigationDestination(
+                icon: Icon(Icons.person_outline, size: 28),
+                selectedIcon: Icon(Icons.person, size: 28),
+                label: "Profile",
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -3,6 +3,7 @@ import 'package:get_it/get_it.dart';
 import '../../core/user_profile.dart';
 import '../../core/user_repo.dart';
 import 'auth_service.dart';
+import '../../core/health_repository.dart';
 import '../dashboard/dashboard_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -15,7 +16,7 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
-  final int _totalPages = 7;
+  final int _totalPages = 8; // Added a syncing page
 
   // Form Data
   int _age = 25;
@@ -40,11 +41,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             Expanded(
               child: PageView(
                 controller: _pageController,
-                physics: _currentPage == 6 && !_privacyAccepted ? const NeverScrollableScrollPhysics() : null,
+                physics: const NeverScrollableScrollPhysics(), // Prevent swipe to force button use for async tasks
                 onPageChanged: (index) => setState(() => _currentPage = index),
                 children: [
                   _buildIntroPage(
-                    "Holistic Health",
+                    "Neuralis",
                     "Your AI coach for sleep, nutrition, and fitness.",
                     Icons.health_and_safety,
                   ),
@@ -77,6 +78,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                   _buildGoalsPage(),
                   _buildPrivacyPage(),
+                  _buildSyncingPage(),
                 ],
               ),
             ),
@@ -100,22 +102,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ElevatedButton(
                     onPressed: (_currentPage == 6 && !_privacyAccepted) 
                       ? null 
-                      : () {
-                        if (_currentPage < _totalPages - 1) {
+                      : () async {
+                        if (_currentPage == 6) { // Privacy page -> Sync Page
+                           _pageController.nextPage(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeIn,
+                          );
+                          // Automatically start the sync process
+                          await _performInitialSync();
+                        } else if (_currentPage < _totalPages - 1) {
                           _pageController.nextPage(
                             duration: const Duration(milliseconds: 300),
                             curve: Curves.easeIn,
                           );
                         } else {
-                          // Complete Onboarding & Save Profile
-                          _saveProfile();
-                          Navigator.of(context).pushReplacement(
-                            MaterialPageRoute(
-                                builder: (_) => const DashboardScreen()),
-                          );
+                          // Fallback if they somehow hit next on the syncing page
+                          _completeOnboarding();
                         }
                       },
-                    child: Text(_currentPage == _totalPages - 1 ? "Get Started" : "Next"),
+                    child: Text(_currentPage == 6 ? "Sync Health Data" : (_currentPage == _totalPages - 1 ? "Finishing..." : "Next")),
                   ),
                 ],
               ),
@@ -123,6 +128,67 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildSyncingPage() {
+    return const Padding(
+      padding: EdgeInsets.all(32.0),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(color: Colors.teal),
+          SizedBox(height: 32),
+          Text(
+            "Connecting to Health Connect...",
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            textAlign: TextAlign.center,
+          ),
+          SizedBox(height: 16),
+          Text(
+            "Please grant the permissions in the popup to allow Neuralis to provide personalized coaching based on your activity, sleep, and heart rate.",
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 16, color: Colors.blueGrey),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _performInitialSync() async {
+    final healthRepo = GetIt.I<HealthRepository>();
+    
+    // First, request permissions properly
+    final status = await healthRepo.requestPermissions();
+    
+    if (mounted) {
+      if (status == HealthConnectionStatus.granted) {
+        try {
+          await healthRepo.syncFromWearables(forceAll: true);
+        } catch (e) {
+          print("Initial sync failed: $e");
+        }
+      } else if (status == HealthConnectionStatus.notInstalled) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Health Connect not found. You can set it up later in Settings.")),
+        );
+      } else if (status == HealthConnectionStatus.cancelled) {
+         ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Sync skipped. You can enable it later in Settings.")),
+        );
+      }
+    }
+    
+    // Always complete the onboarding flow so the user isn't stuck
+    if (mounted) {
+       _completeOnboarding();
+    }
+  }
+  
+  void _completeOnboarding() {
+    _saveProfile();
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const DashboardScreen()),
     );
   }
 
@@ -163,13 +229,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final userId = authService.userId;
     
     if (userId != null) {
+      final user = authService.currentUser;
+      final name = user?.userMetadata?['display_name'] ?? 
+                   user?.userMetadata?['full_name'] ?? 
+                   "User";
+
       final profile = UserProfile(
         userId: userId,
+        name: name,
         age: _age,
         weight: _weight,
         fitnessLevel: _fitnessLevel,
         goals: _selectedGoals.toList(),
         fitnessGoal: _selectedGoals.isNotEmpty ? _selectedGoals.first : "General Health",
+        onboardingCompleted: true,
       );
       await userRepo.saveProfile(profile);
       print("Onboarding: Saved profile for $userId");
@@ -182,8 +255,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          if (title == "Holistic Health")
-            Image.asset('assets/images/logo.png', height: 120)
+          if (title == "Neuralis")
+            Image.asset('assets/images/logo_white.png', height: 120)
           else
             Icon(icon, size: 100, color: Theme.of(context).primaryColor),
           const SizedBox(height: 32),

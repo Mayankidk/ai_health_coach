@@ -11,6 +11,15 @@ import '../features/auth/auth_service.dart';
 import 'user_repo.dart';
 import 'user_profile.dart';
 
+enum HealthConnectionStatus {
+  granted,
+  cancelled,
+  notInstalled,
+  updateRequired,
+  alreadyConnected,
+  error,
+}
+
 class HealthRepository {
   // Only instantiate Health if NOT on web to avoid Platform errors
   final Health? _health = kIsWeb ? null : Health();
@@ -184,11 +193,27 @@ class HealthRepository {
       return;
     }
     
-    // By default, only sync today's data to save time and API calls.
-    // Use forceAll = true only for manual refreshes or initial setup.
-    final now = DateTime.now();
-    final daysToSync = forceAll ? 7 : 1;
+    // By default, we calculate how many days need to be synced by checking the last recorded data.
+    // Use forceAll = true for manual refreshes (force full 7 days).
+    int daysToSync = 1;
+
+    if (forceAll) {
+      daysToSync = 7;
+    } else {
+      // Smart Backfill: Check the last 7 days in Hive and see where the gaps are.
+      final now = DateTime.now();
+      for (int i = 1; i < 7; i++) {
+        final checkDate = now.subtract(Duration(days: i));
+        final checkDateStr = checkDate.toIso8601String().split('T')[0];
+        if (!_box!.containsKey(checkDateStr)) {
+          // Found a gap! We need to sync at least up to this day.
+          daysToSync = i + 1;
+        }
+      }
+      print("HealthRepository: Smart backfill detected gap of $daysToSync days.");
+    }
     
+    final now = DateTime.now();
     for (int i = 0; i < daysToSync; i++) {
       final targetDate = now.subtract(Duration(days: i));
       final dateStr = targetDate.toIso8601String().split('T')[0];
@@ -229,6 +254,22 @@ class HealthRepository {
     _controller.add(_currentData);
     await _syncToCloud(DateTime.now(), _currentData);
     print("HealthRepository: Manual sleep update saved: $minutes mins");
+  }
+
+  Future<void> updateManualHRV(double hrv) async {
+    final todayStr = DateTime.now().toIso8601String().split('T')[0];
+    
+    _currentData = HealthData(
+      steps: _currentData.steps,
+      sleepMinutes: _currentData.sleepMinutes,
+      activeEnergyBurned: _currentData.activeEnergyBurned,
+      hrv: hrv,
+    );
+    
+    await _box?.put(todayStr, _currentData);
+    _controller.add(_currentData);
+    await _syncToCloud(DateTime.now(), _currentData);
+    print("HealthRepository: Manual HRV update saved: $hrv ms");
   }
 
   Future<void> _syncToCloud(DateTime date, HealthData data) async {
@@ -326,81 +367,134 @@ class HealthRepository {
     return calories;
   }
 
-  Future<void> openHealthConnectSettings() async {
-    print("HealthRepository: Attempting to open Health Connect Settings...");
+  Future<void> openHealthConnectApp() async {
+    print("HealthRepository: Attempting to open Health Connect app...");
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+
     try {
-      // This intent works for most Android versions to jump straight to the Health Connect app
-      final intentUri = Uri.parse("package:com.google.android.apps.healthdata");
-      // Note: Launching by package name usually opens the app info page or the app itself
-      if (!await launchUrl(intentUri)) {
-        // Fallback to store
+      // Try opening the Health Connect app directly via its package launch intent
+      final launched = await launchUrl(
+        Uri.parse('https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata'),
+        mode: LaunchMode.externalApplication,
+      );
+
+      if (!launched) {
         await _openHealthConnectInStore();
       }
     } catch (e) {
-      print("HealthRepository: Error opening settings: $e");
+      print("HealthRepository: Error opening Health Connect: $e");
       await _openHealthConnectInStore();
     }
   }
 
   Future<void> _openHealthConnectInStore() async {
-    print("HealthRepository: Manually opening Health Connect in Play Store...");
+    print("HealthRepository: Opening Health Connect in Play Store...");
     final Uri url = Uri.parse(
-      'https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata',
+      'market://details?id=com.google.android.apps.healthdata',
     );
     try {
       if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-        print("HealthRepository: Could not launch Play Store URL");
+        // Fallback to web URL
+        await launchUrl(
+          Uri.parse('https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata'),
+          mode: LaunchMode.externalApplication,
+        );
       }
     } catch (e) {
       print("HealthRepository: Error launching Play Store: $e");
     }
   }
 
-  Future<bool> requestPermissions() async {
+  Future<HealthConnectionStatus> requestPermissions() async {
     print("HealthRepository: Starting permission request...");
-    if (kIsWeb) return true;
+    if (kIsWeb) return HealthConnectionStatus.granted;
     
-    // Check Health Connect Status (Android specific)
     if (defaultTargetPlatform == TargetPlatform.android) {
       try {
         final status = await _health?.getHealthConnectSdkStatus();
         final statusStr = status.toString();
         print("HealthRepository: Health Connect Status is: $statusStr");
         
-        if (statusStr.contains('sdkInstalled') || statusStr.contains('SDK_INSTALLED')) {
-          print("HealthRepository: Health Connect reported as INSTALLED.");
-        } else if (statusStr.contains('UpdateRequired')) {
-          print("HealthRepository: Android 12 Warning: Status says UpdateRequired, but we will try to ignore this and request anyway.");
-          // Don't return, let's see if the system popup works anyway
+        if (statusStr.contains('Installed') || 
+            statusStr.contains('INSTALLED') || 
+            statusStr.contains('Available') || 
+            statusStr.contains('AVAILABLE')) {
+          // OK - Means the SDK is ready or the Provider app is installed
+        } else if (statusStr.contains('Update') || statusStr.contains('UPDATE')) {
+          return HealthConnectionStatus.updateRequired;
         } else {
-          print("HealthRepository: Health Connect state: $statusStr. Opening store...");
-          await _health?.installHealthConnect();
-          await _openHealthConnectInStore();
-          return false;
+          return HealthConnectionStatus.notInstalled;
         }
       } catch (e) {
-        print("HealthRepository: Status check failed: $e. This can happen on Android 12 if the Beta app is in a weird state.");
+        print("HealthRepository: Status check failed: $e");
       }
     }
 
     var types = [
       HealthDataType.STEPS,
+      HealthDataType.ACTIVE_ENERGY_BURNED,
+      HealthDataType.HEART_RATE,
+      HealthDataType.SLEEP_SESSION,
+    ];
+
+    try {
+      // 1. Check if we already have ALL permissions
+      bool? hasAll = await _health?.hasPermissions(types);
+      if (hasAll == true) {
+        print("HealthRepository: All permissions already granted.");
+        return HealthConnectionStatus.granted;
+      }
+
+      // 2. Try bulk request first
+      print("HealthRepository: Requesting bulk authorization for: $types");
+      bool? bulkSuccess = await _health?.requestAuthorization(types);
+      if (bulkSuccess == true) {
+        return HealthConnectionStatus.granted;
+      }
+
+      // 3. requestAuthorization returns false for previously-granted permissions.
+      //    Verify with hasPermissions before giving up.
+      bool? alreadyHas = await _health?.hasPermissions(types);
+      if (alreadyHas == true) {
+        print("HealthRepository: Permissions already granted (prior session).");
+        return HealthConnectionStatus.granted;
+      }
+
+      // 4. If still no luck, try a curated "essential" list (Steps + Energy)
+      print("HealthRepository: Bulk failed. Trying curated essential set...");
+      var essentialTypes = [HealthDataType.STEPS, HealthDataType.ACTIVE_ENERGY_BURNED];
+      bool? essentialSuccess = await _health?.requestAuthorization(essentialTypes);
+      
+      if (essentialSuccess == true) {
+        print("HealthRepository: Essential permissions granted.");
+        return HealthConnectionStatus.granted; 
+      }
+
+      // Same pattern: verify before giving up
+      bool? hasEssential = await _health?.hasPermissions(essentialTypes);
+      if (hasEssential == true) {
+        print("HealthRepository: Essential permissions already granted (prior session).");
+        return HealthConnectionStatus.granted;
+      }
+
+      return HealthConnectionStatus.cancelled;
+    } catch (e) {
+      print("HealthRepository: Permission Error: $e");
+      return HealthConnectionStatus.error;
+    }
+  }
+
+  Future<bool> hasPermissions({List<HealthDataType>? customTypes}) async {
+    if (kIsWeb) return true;
+    var types = customTypes ?? [
+      HealthDataType.STEPS,
       HealthDataType.HEART_RATE,
       HealthDataType.SLEEP_SESSION,
       HealthDataType.ACTIVE_ENERGY_BURNED,
-      HealthDataType.BASAL_ENERGY_BURNED,
-      HealthDataType.TOTAL_CALORIES_BURNED,
     ];
-
-    print("HealthRepository: Requesting authorization for: $types");
     try {
-      bool? requested = await _health?.requestAuthorization(types);
-      print("HealthRepository: Authorization result: $requested");
-      return requested ?? false;
+      return await _health?.hasPermissions(types) ?? false;
     } catch (e) {
-      print("HealthRepository: CRITICAL Permission Error: $e");
-      // If it fails here, THEN we force open the store
-      await _openHealthConnectInStore();
       return false;
     }
   }

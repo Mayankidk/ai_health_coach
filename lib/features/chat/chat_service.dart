@@ -1,3 +1,4 @@
+import 'package:hive/hive.dart';
 import '../../core/services.dart';
 import 'gemini_service.dart';
 import '../plans/plan_service.dart';
@@ -5,18 +6,19 @@ import '../../core/user_profile.dart';
 import '../../core/health_repository.dart';
 import '../auth/auth_service.dart';
 import '../../core/health_log.dart';
-import 'package:hive/hive.dart';
+import '../../core/memory_repository.dart';
 
 class ChatService {
   final GeminiService _gemini = getIt<GeminiService>();
   final PlanService _planService = getIt<PlanService>();
   final HealthRepository _healthRepo = getIt<HealthRepository>();
+  final MemoryRepository _memoryRepo = getIt<MemoryRepository>();
   final AuthService _auth = getIt<AuthService>();
 
   Future<String> sendMessage(String text, List<Map<String, String>> history) async {
     try {
       // 1. Fetch active memory logs to give context to Gemini
-      final activeLogs = Hive.box<HealthLog>('health_logs')
+      final activeLogs = _memoryRepo.box
           .values
           .where((log) => log != null && log.isActive)
           .map((log) => log.content ?? "")
@@ -71,17 +73,25 @@ class ChatService {
       print("ChatService: Extracting insights in background...");
       final insights = await _gemini.extractInsights(userMessage, aiResponse);
       if (insights.isNotEmpty) {
-        final logBox = Hive.box<HealthLog>('health_logs');
-        for (final insight in insights) {
-          // Avoid duplicates if possible
-          final exists = logBox.values.any((l) => l != null && l.content.toLowerCase() == insight.toLowerCase());
+        for (final insightWithTag in insights) {
+          final isAuto = insightWithTag.startsWith('[AUTO]');
+          final cleanContent = insightWithTag
+              .replaceFirst('[AUTO]', '')
+              .replaceFirst('[SUGGEST]', '')
+              .trim();
+          
+          if (cleanContent.isEmpty) continue;
+
+          // Avoid duplicates
+          final exists = _memoryRepo.box.values.any((l) => l != null && l.content.toLowerCase() == cleanContent.toLowerCase());
           if (!exists) {
-            await logBox.add(HealthLog(
-              content: insight,
-              isActive: false, // User must manually approve/sync
+            final newLog = HealthLog(
+              content: cleanContent,
+              isActive: isAuto, // Auto-activate if tagged [AUTO]
               createdAt: DateTime.now(),
-            ));
-            print("ChatService: Saved new insight suggestion: $insight");
+            );
+            await _memoryRepo.saveMemory(newLog);
+            print("ChatService: Saved ${isAuto ? 'ACTIVE' : 'SUGGESTED'} insight: $cleanContent");
           }
         }
       }

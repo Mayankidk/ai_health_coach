@@ -19,7 +19,7 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final List<types.Message> _messages = [];
   late final types.User _user;
-  final _bot = const types.User(id: 'bot', firstName: 'AI Coach');
+  final _bot = const types.User(id: 'bot', firstName: 'Neuralis');
   final _chatService = GetIt.I<ChatService>();
   final _authService = GetIt.I<AuthService>();
   final _textController = TextEditingController();
@@ -38,7 +38,7 @@ class _ChatScreenState extends State<ChatScreen> {
       author: _bot,
       createdAt: DateTime.now().millisecondsSinceEpoch,
       id: const Uuid().v4(),
-      text: "Hello! I'm your AI Health Coach. How are you feeling today?",
+      text: "Hello! I'm Neuralis, your AI Health Coach. How are you feeling today?",
     ));
   }
 
@@ -119,7 +119,7 @@ class _ChatScreenState extends State<ChatScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('AI Health Coach'),
+            const Text('Neuralis'),
             if (_isTyping)
               Text(
                 'Thinking...',

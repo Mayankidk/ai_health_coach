@@ -13,32 +13,26 @@ class DeviceSettingsScreen extends StatefulWidget {
 class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
   final HealthRepository _healthRepo = GetIt.I<HealthRepository>();
   bool _isConnecting = false;
+  bool _isConnected = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkPermissions();
+  }
+
+  Future<void> _checkPermissions() async {
+    final hasPerms = await _healthRepo.hasPermissions();
+    if (mounted) {
+      setState(() => _isConnected = hasPerms);
+    }
+  }
 
   Future<void> _handleConnect() async {
-    setState(() => _isConnecting = true);
-    
-    // Request permissions from HealthKit/Google Fit
-    final success = await _healthRepo.requestPermissions();
-    
-    if (mounted) {
-      setState(() => _isConnecting = false);
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Successfully connected to Health Data!")),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text("Failed to connect. App not in Health Connect list?"),
-            duration: const Duration(seconds: 8),
-            action: SnackBarAction(
-              label: "Troubleshoot",
-              onPressed: () => _healthRepo.openHealthConnectSettings(),
-            ),
-          ),
-        );
-      }
-    }
+    // Open Health Connect Play Store page directly.
+    // The programmatic permission request is unreliable on many OEM Android skins,
+    // so we direct users to manage permissions from the Health Connect app itself.
+    await _healthRepo.openHealthConnectApp();
   }
 
   @override
@@ -51,12 +45,14 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           _buildDeviceCard(
-            title: kIsWeb ? "Simulated Health Data" : (Theme.of(context).platform == TargetPlatform.iOS ? "Apple Health" : "Google Fit"),
-            subtitle: "Sync steps, sleep, and heart rate.",
+            title: kIsWeb ? "Simulated Health Data" : (Theme.of(context).platform == TargetPlatform.iOS ? "Apple Health" : "Health Connect"),
+            subtitle: "Sync steps, sleep, and heart rate (Google Fit, etc.).",
             icon: Icons.favorite,
-            isConnected: true, // For demo, let's assume it's connected or can be toggled
+            isConnected: _isConnected,
             onAction: _handleConnect,
             isLoading: _isConnecting,
+            showManage: _isConnected,
+            onManage: () => _healthRepo.openHealthConnectApp(),
           ),
           const SizedBox(height: 16),
           _buildDeviceCard(
@@ -95,6 +91,8 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
     required bool isConnected,
     required VoidCallback onAction,
     bool isLoading = false,
+    bool showManage = false,
+    VoidCallback? onManage,
   }) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -139,10 +137,20 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
           if (isLoading)
             const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
           else
-            TextButton(
-              onPressed: onAction,
-              child: Text(isConnected ? "Re-sync" : "Connect",
-                  style: TextStyle(color: isConnected ? Colors.teal : Colors.blue)),
+            Column(
+              children: [
+                TextButton(
+                  onPressed: onAction,
+                  child: Text(isConnected ? "Re-sync" : "Connect",
+                      style: TextStyle(color: isConnected ? Colors.teal : Colors.blue)),
+                ),
+                if (showManage)
+                  TextButton(
+                    onPressed: onManage,
+                    style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                    child: const Text("Manage", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                  ),
+              ],
             ),
         ],
       ),

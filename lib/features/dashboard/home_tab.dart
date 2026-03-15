@@ -69,15 +69,16 @@ class _HomeTabState extends State<HomeTab> {
   }
 
   Future<void> _handleRefresh({bool silent = false}) async {
-    // Only perform a full 7-day backfill if manually triggered (not silent)
+    // Perform a smart backfill (or full 7-day if manual)
     await _healthRepo.syncFromWearables(forceAll: !silent);
     
     if (!silent) {
       // Only show notification if manually triggered
       final notificationService = getIt<NotificationService>();
-      notificationService.showNudge("Data Synced", "Your 7-day activity history has been refreshed.");
+      notificationService.showNudge("Data Synced", "Your activity history has been refreshed.");
     }
 
+    // CRITICAL: Always reload weekly data after a sync to update charts
     await _loadWeeklyData();
 
     if (mounted) {
@@ -139,17 +140,17 @@ class _HomeTabState extends State<HomeTab> {
                 style: const TextStyle(
                   fontSize: 48,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF006B6B),
+                  color: Colors.blueAccent,
                   letterSpacing: -1,
                 ),
               ),
               const SizedBox(height: 10),
               SliderTheme(
                 data: SliderTheme.of(context).copyWith(
-                  activeTrackColor: const Color(0xFF006B6B),
-                  inactiveTrackColor: const Color(0xFF006B6B).withOpacity(0.1),
-                  thumbColor: const Color(0xFF006B6B),
-                  overlayColor: const Color(0xFF006B6B).withOpacity(0.1),
+                  activeTrackColor: Colors.blueAccent,
+                  inactiveTrackColor: Colors.blueAccent.withOpacity(0.1),
+                  thumbColor: Colors.blueAccent,
+                  overlayColor: Colors.blueAccent.withOpacity(0.1),
                 ),
                 child: Slider(
                   value: hours,
@@ -169,6 +170,103 @@ class _HomeTabState extends State<HomeTab> {
                   onPressed: () async {
                     final totalMinutes = (hours * 60).round();
                     await _healthRepo.updateManualSleep(totalMinutes);
+                    if (mounted) {
+                      Navigator.pop(context);
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1A1A1A),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    "Save Log",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showHRVLogger(double currentHrv) async {
+    double hrv = currentHrv.clamp(0, 150).toDouble();
+    
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => Container(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.all(Radius.circular(32)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 15),
+              const Text(
+                "What is your HRV?",
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1A1A1A),
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                "Slide to log your heart rate variability",
+                style: TextStyle(color: Colors.grey[500], fontSize: 14),
+              ),
+              const SizedBox(height: 15),
+              Text(
+                "${hrv.toInt()} ms",
+                style: const TextStyle(
+                  fontSize: 48,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.redAccent,
+                  letterSpacing: -1,
+                ),
+              ),
+              const SizedBox(height: 10),
+              SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  activeTrackColor: Colors.redAccent,
+                  inactiveTrackColor: Colors.redAccent.withOpacity(0.1),
+                  thumbColor: Colors.redAccent,
+                  overlayColor: Colors.redAccent.withOpacity(0.1),
+                ),
+                child: Slider(
+                  value: hrv,
+                  min: 0,
+                  max: 150,
+                  divisions: 150,
+                  onChanged: (val) {
+                    setModalState(() => hrv = val);
+                  },
+                ),
+              ),
+              const SizedBox(height: 15),
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    await _healthRepo.updateManualHRV(hrv);
                     if (mounted) {
                       Navigator.pop(context);
                     }
@@ -360,7 +458,7 @@ class _HomeTabState extends State<HomeTab> {
                                                 profile: profile,
                                                 weeklySteps: stepHistory,
                                               );
-                                              final timestamp = "Generated on ${TimeFormatter.format12Hour(DateTime.now())}";
+                                              final timestamp = "Generated on ${TimeFormatter.formatFullDateTime(DateTime.now())}";
                                               
                                               await insightBox.put('latest_insight', insight);
                                               await insightBox.put('latest_timestamp', timestamp);
@@ -591,6 +689,7 @@ class _HomeTabState extends State<HomeTab> {
                                   unit: "ms",
                                   icon: Icons.monitor_heart,
                                   color: Colors.red.shade400,
+                                  onTap: () => _showHRVLogger(data?.hrv ?? 70.0),
                                 ),
                               ),
                             ],
@@ -611,36 +710,14 @@ class _HomeTabState extends State<HomeTab> {
   }
 
   Widget _buildQuickNudge(int steps, int goal, UserProfile? profile, HealthData? healthData) {
-    String message;
-    IconData icon;
+    String message = "Tap the refresh icon to generate your daily AI insight.";
+    IconData icon = Icons.auto_awesome;
     Color color = const Color(0xFF006B6B);
     
-    // If we have an AI insight, use it!
-    if (_dailyInsight != null) {
+    if (_dailyInsight != null && !_isAnalyzingDaily) {
       message = _dailyInsight!;
-      icon = Icons.auto_awesome;
-    } else {
-      double progress = (steps / goal).clamp(0.0, 1.0);
-      if (steps == 0) {
-        message = "Ready to start? Even a short walk does wonders for your energy.";
-        icon = Icons.directions_walk;
-      } else if (progress < 0.3) {
-        message = "Off to a good start! Let's keep those legs moving today.";
-        icon = Icons.bolt;
-      } else if (progress < 0.6) {
-        message = "Nearly halfway! You're building great momentum.";
-        icon = Icons.trending_up;
-      } else if (progress < 0.9) {
-        message = "So close to your goal! Just a final push to cross the finish line.";
-        icon = Icons.flag;
-      } else if (progress < 1.0) {
-        message = "Almost there! One more short walk and you've nailed it.";
-        icon = Icons.stars;
-      } else {
-        message = "Goal smashed! Your consistency is truly impressive.";
-        icon = Icons.celebration;
-        color = const Color(0xFFE6AE2D); // Gold for success
-      }
+    } else if (_isAnalyzingDaily) {
+      message = "Gemini is personalizing your insight...";
     }
 
     return Padding(
@@ -652,9 +729,9 @@ class _HomeTabState extends State<HomeTab> {
             children: [
               Icon(icon, size: 24, color: color),
               const SizedBox(width: 12),
-              Expanded(
+              const Expanded(
                 child: Text(
-                  _dailyInsight != null ? "Daily AI Insight" : "Coach's Nudge",
+                  "Daily AI Insight",
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -680,11 +757,13 @@ class _HomeTabState extends State<HomeTab> {
                           if (profile == null || healthData == null) return;
                           setState(() => _isAnalyzingDaily = true);
                           try {
+                            final currentTime = TimeFormatter.format12Hour(DateTime.now());
                             final insight = await _geminiService.generateDailyInsight(
                               profile: profile,
                               healthData: healthData,
+                              currentTime: currentTime,
                             );
-                            final timestamp = "Generated on ${TimeFormatter.format12Hour(DateTime.now())}";
+                            final timestamp = "Generated on ${TimeFormatter.formatFullDateTime(DateTime.now())}";
                             
                             await Hive.box('ai_insights').put('daily_insight', insight);
                             await Hive.box('ai_insights').put('daily_insight_timestamp', timestamp);
@@ -699,7 +778,7 @@ class _HomeTabState extends State<HomeTab> {
                             setState(() => _isAnalyzingDaily = false);
                           }
                         },
-                        icon: Icon(_dailyInsight != null ? Icons.refresh_rounded : Icons.auto_awesome, size: 20),
+                        icon: const Icon(Icons.refresh_rounded, size: 20),
                         color: color,
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
@@ -709,7 +788,7 @@ class _HomeTabState extends State<HomeTab> {
           ),
           const SizedBox(height: 5),
           Text(
-            _isAnalyzingDaily ? "Gemini is personalizing your insight..." : message,
+            message,
             style: TextStyle(
               fontSize: 16,
               color: Colors.grey[800],

@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'auth_service.dart';
 import 'onboarding_screen.dart';
+import '../dashboard/dashboard_screen.dart';
+import '../../core/user_repo.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -13,6 +16,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _nameController = TextEditingController();
   bool _isLoading = false;
   bool _isLogin = true;
   final _authService = GetIt.I<AuthService>();
@@ -28,9 +32,18 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
     try {
       if (_isLogin) {
-        await _authService.signIn(_emailController.text, _passwordController.text);
+        await _authService.signIn(_emailController.text, _passwordController.text)
+            .timeout(const Duration(seconds: 15), onTimeout: () {
+              throw TimeoutException("Login timed out. Please check your internet connection.");
+            });
       } else {
-        await _authService.signUp(_emailController.text, _passwordController.text);
+        await _authService.signUp(
+          _emailController.text, 
+          _passwordController.text,
+          displayName: _nameController.text.trim(),
+        ).timeout(const Duration(seconds: 15), onTimeout: () {
+          throw TimeoutException("Account creation timed out.");
+        });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Check your email for confirmation!")),
@@ -39,18 +52,16 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       if (mounted && _authService.isAuthenticated) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const OnboardingScreen()),
-        );
+        await _navigateToAppropriateScreen();
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
+          SnackBar(content: Text(e is TimeoutException ? e.message! : e.toString())),
         );
       }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -59,9 +70,7 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       await _authService.signInWithGoogle();
       if (mounted && _authService.isAuthenticated) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const OnboardingScreen()),
-        );
+        await _navigateToAppropriateScreen();
       }
     } catch (e) {
       if (mounted) {
@@ -79,9 +88,7 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       await _authService.signInAnonymously();
       if (mounted && _authService.isAuthenticated) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const OnboardingScreen()),
-        );
+        await _navigateToAppropriateScreen();
       }
     } catch (e) {
       if (mounted) {
@@ -91,6 +98,21 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _navigateToAppropriateScreen() async {
+    final userRepo = GetIt.I<UserRepository>();
+    final profile = await userRepo.ensureProfileSynced(_authService.userId!);
+    
+    if (mounted) {
+      final nextScreen = profile?.onboardingCompleted == true
+          ? const DashboardScreen()
+          : const OnboardingScreen();
+          
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => nextScreen),
+      );
     }
   }
 
@@ -105,7 +127,7 @@ class _LoginScreenState extends State<LoginScreen> {
           children: [
             Center(
               child: Image.asset(
-                'assets/images/logo.png',
+                'assets/images/logo_white.png',
                 height: 120,
               ),
             ),
@@ -119,6 +141,18 @@ class _LoginScreenState extends State<LoginScreen> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 32),
+            if (!_isLogin) ...[
+              TextField(
+                controller: _nameController,
+                decoration: const InputDecoration(
+                  labelText: "Full Name",
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.person),
+                ),
+                textCapitalization: TextCapitalization.words,
+              ),
+              const SizedBox(height: 16),
+            ],
             TextField(
               controller: _emailController,
               decoration: const InputDecoration(

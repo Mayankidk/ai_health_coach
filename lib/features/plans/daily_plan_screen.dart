@@ -8,6 +8,9 @@ import '../auth/auth_service.dart';
 import '../notifications/notification_service.dart';
 import 'plan_service.dart';
 import 'daily_plan.dart';
+import '../chat/gemini_service.dart';
+import '../../core/widgets/app_loading.dart';
+import '../../core/time_formatter.dart';
 
 class DailyPlanScreen extends StatefulWidget {
   const DailyPlanScreen({super.key});
@@ -119,55 +122,46 @@ class _DailyPlanScreenState extends State<DailyPlanScreen> {
       body: _buildBody(),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'daily_plan_fab',
-        onPressed: () {
-          final notificationService = getIt<NotificationService>();
-          notificationService.showNudge(
-            "It's time to move!",
-            "Take a short walk to reach your step goal.",
-          );
+        onPressed: () async {
+          final authService = getIt<AuthService>();
+          final userId = authService.userId;
+          if (userId == null) return;
+
+          // Show a simple loading state or just proceed silently
+          final profileBox = Hive.box<UserProfile>('user_profile');
+          final profile = profileBox.get(userId);
+          final healthData = _healthRepo.getDailyData(DateTime.now());
+
+          if (profile != null) {
+            String nudgeMessage = "Keep pushing towards your goals!";
+            try {
+              final geminiService = getIt<GeminiService>();
+              final currentTime = TimeFormatter.format12Hour(DateTime.now());
+              nudgeMessage = await geminiService.generateDailyInsight(
+                profile: profile,
+                healthData: healthData,
+                currentTime: currentTime,
+              );
+            } catch (e) {
+              print("DailyPlanScreen: AI Nudge failed, using fallback. $e");
+            }
+
+            final notificationService = getIt<NotificationService>();
+            notificationService.showNudge(
+              "Coach's Nudge",
+              nudgeMessage,
+            );
+          }
         },
-        icon: const Icon(Icons.notifications_active),
-        label: const Text("Test Nudge"),
+        icon: const Icon(Icons.auto_awesome_rounded),
+        label: const Text("Nudge"),
       ),
     );
   }
 
   Widget _buildBody() {
     if (_isLoading) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0, end: 1),
-              duration: const Duration(seconds: 2),
-              builder: (ctx, val, child) => Transform.rotate(
-                angle: val * 2 * 3.14,
-                child: const Icon(Icons.auto_awesome, color: Color(0xFF006B6B), size: 48),
-              ),
-            ),
-            const SizedBox(height: 24),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              child: Text(
-                _loadingMessages[_loadingStep],
-                key: ValueKey(_loadingStep),
-                style: const TextStyle(
-                  color: Color(0xFF006B6B),
-                  fontWeight: FontWeight.w600,
-                  fontSize: 16,
-                  letterSpacing: -0.2,
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              "Our AI is tailoring this specifically for you",
-              style: TextStyle(color: Colors.grey[400], fontSize: 13),
-            ),
-          ],
-        ),
-      );
+      return AppLoading(message: _loadingMessages[_loadingStep]);
     }
 
     if (_errorMessage != null) {
@@ -232,11 +226,8 @@ class _DailyPlanScreenState extends State<DailyPlanScreen> {
           },
           child: _buildPlanItem(
             context,
-            item.type.toUpperCase(),
-            item.description,
-            _getIconForType(item.type),
-            _getColorForType(item.type),
-            item.details,
+            index - 1,
+            item,
           ),
         );
       },
@@ -309,74 +300,117 @@ class _DailyPlanScreenState extends State<DailyPlanScreen> {
     );
   }
 
-  Widget _buildPlanItem(BuildContext context, String type, String title, IconData icon, Color color, String details) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(5),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+  Widget _buildPlanItem(BuildContext context, int itemIndex, PlanItem item) {
+    final color = _getColorForType(item.type);
+    final icon = _getIconForType(item.type);
+    final isCompleted = item.isCompleted;
+
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 300),
+      opacity: isCompleted ? 0.6 : 1.0,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: isCompleted ? Colors.grey.withAlpha(40) : color.withAlpha(50),
+            width: 1.5,
           ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: color.withAlpha(20),
-              borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(12),
+              blurRadius: 15,
+              offset: const Offset(0, 8),
             ),
-            child: Icon(icon, color: color, size: 24),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  type,
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                    letterSpacing: 1,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1A1A1A),
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  details,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey[600],
-                  ),
-                ),
-              ],
+          ],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isCompleted ? Colors.grey.withAlpha(20) : color.withAlpha(20),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(icon, color: isCompleted ? Colors.grey : color, size: 24),
             ),
-          ),
-          Checkbox(
-            value: false,
-            onChanged: (v) {},
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-            activeColor: const Color(0xFF006B6B),
-          ),
-        ],
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.type.toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: isCompleted ? Colors.grey : color,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    item.description,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: isCompleted ? Colors.grey : const Color(0xFF1A1A1A),
+                      decoration: isCompleted ? TextDecoration.lineThrough : null,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    item.details,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isCompleted ? Colors.grey[400] : Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Transform.scale(
+              scale: 1.1,
+              child: Checkbox(
+                value: isCompleted,
+                onChanged: (v) => _toggleCompletion(itemIndex),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                activeColor: const Color(0xFF006B6B),
+              ),
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  Future<void> _toggleCompletion(int index) async {
+    if (_currentPlan == null) return;
+
+    final updatedItems = List<PlanItem>.from(_currentPlan!.schedule);
+    updatedItems[index] = updatedItems[index].copyWith(
+      isCompleted: !updatedItems[index].isCompleted,
+    );
+
+    final updatedPlan = DailyPlan(
+      date: _currentPlan!.date,
+      summary: _currentPlan!.summary,
+      schedule: updatedItems,
+      advice: _currentPlan!.advice,
+    );
+
+    // Update Local State
+    setState(() {
+      _currentPlan = updatedPlan;
+    });
+
+    // Persist to Hive
+    final planBox = Hive.box<DailyPlan>('daily_plans');
+    await planBox.put(updatedPlan.date, updatedPlan);
+    
+    print("DailyPlanScreen: Toggled item $index and persisted to Hive.");
   }
 }

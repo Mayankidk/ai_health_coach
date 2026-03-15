@@ -2,6 +2,7 @@ import 'package:hive/hive.dart';
 import 'daily_plan.dart';
 import '../../core/health_data.dart';
 import '../../core/user_profile.dart';
+import '../../core/health_log.dart';
 import '../../core/services.dart';
 import '../chat/gemini_service.dart';
 
@@ -28,9 +29,17 @@ class PlanService {
 
     print("PlanService: No cached plan for $todayStr. Triggering AI generation...");
     try {
+      // Fetch active memory logs
+      final activeLogs = Hive.box<HealthLog>('health_logs')
+          .values
+          .where((log) => log != null && log.isActive)
+          .map((log) => log.content)
+          .toList();
+
       final plan = await _gemini.generatePlan(
         profile: profile,
         healthData: healthData,
+        activeLogs: activeLogs,
         additionalContext: additionalContext,
       );
 

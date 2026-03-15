@@ -3,85 +3,14 @@ import 'package:hive_flutter/hive_flutter.dart';
 import '../../core/health_log.dart';
 import 'package:intl/intl.dart';
 import '../../core/time_formatter.dart';
+import '../../core/memory_repository.dart';
+import '../../core/services.dart';
 
-class MemoryVaultScreen extends StatelessWidget {
+class MemoryVaultScreen extends StatefulWidget {
   const MemoryVaultScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final box = Hive.box<HealthLog>('health_logs');
-
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        centerTitle: false,
-        title: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Memory Vault', style: TextStyle(fontWeight: FontWeight.bold)),
-            Text(
-              'Linked health facts and AI insights',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
-            ),
-          ],
-        ),
-      ),
-      body: ValueListenableBuilder(
-        valueListenable: box.listenable(),
-        builder: (context, Box<HealthLog> box, _) {
-          if (box.isEmpty) {
-            return _buildEmptyState();
-          }
-
-          final allLogs = box.values.toList().reversed.toList();
-
-          return ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            itemCount: allLogs.length,
-            itemBuilder: (context, index) {
-              return _MemoryTile(log: allLogs[index]);
-            },
-          );
-        },
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'memory_vault_fab',
-        onPressed: () => _showAddLogDialog(context, box),
-        backgroundColor: const Color(0xFF006B6B),
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text("New Memory", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.auto_awesome_motion_outlined, size: 80, color: Colors.grey[200]),
-          const SizedBox(height: 24),
-          const Text(
-            "Nothing shared yet",
-            style: TextStyle(color: Color(0xFF1A1A1A), fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 40),
-            child: Text(
-              "Your AI Coach will extract health facts from your conversations and list them here.",
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey, fontSize: 14),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showAddLogDialog(BuildContext context, Box<HealthLog> box) {
-    _openMemoryEditor(context, box);
-  }
+  State<MemoryVaultScreen> createState() => _MemoryVaultScreenState();
 
   static void _openMemoryEditor(BuildContext context, Box<HealthLog> box, {HealthLog? existingLog}) {
     showGeneralDialog(
@@ -99,6 +28,113 @@ class MemoryVaultScreen extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _MemoryVaultScreenState extends State<MemoryVaultScreen> {
+  late final MemoryRepository _memoryRepo;
+  late final Box<HealthLog> _box;
+  bool _isFetching = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _memoryRepo = getIt<MemoryRepository>();
+    _box = _memoryRepo.box;
+    _fetchFromCloud();
+  }
+
+  Future<void> _fetchFromCloud() async {
+    if (!mounted) return;
+    setState(() => _isFetching = true);
+    await _memoryRepo.fetchFromSupabase();
+    if (mounted) setState(() => _isFetching = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        centerTitle: false,
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Memory Vault', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(
+              'Linked health facts and AI insights',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
+            ),
+          ],
+        ),
+        actions: [
+          if (_isFetching)
+            const Padding(
+              padding: EdgeInsets.only(right: 16),
+              child: Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))),
+            ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: _fetchFromCloud,
+        child: ValueListenableBuilder(
+          valueListenable: _box.listenable(),
+          builder: (context, Box<HealthLog> box, _) {
+            if (box.isEmpty) {
+              // Wrap in a scrollable so RefreshIndicator works on empty state too
+              return ListView(
+                children: [_buildEmptyState()],
+              );
+            }
+
+            final allLogs = box.values.toList().reversed.toList();
+
+            return ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              itemCount: allLogs.length,
+              itemBuilder: (context, index) {
+                return _MemoryTile(log: allLogs[index]);
+              },
+            );
+          },
+        ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'memory_vault_fab',
+        onPressed: () => MemoryVaultScreen._openMemoryEditor(context, _box),
+        backgroundColor: const Color(0xFF006B6B),
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text("New Memory", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return SizedBox(
+      height: 400,
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.auto_awesome_motion_outlined, size: 80, color: Colors.grey[200]),
+            const SizedBox(height: 24),
+            const Text(
+              "Nothing shared yet",
+              style: TextStyle(color: Color(0xFF1A1A1A), fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 40),
+              child: Text(
+                "Your AI Coach will extract health facts from your conversations and list them here.",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey, fontSize: 14),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -155,7 +191,7 @@ class _MemoryEditorSheetState extends State<_MemoryEditorSheet> {
                   IconButton(
                     icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
                     onPressed: () {
-                      widget.existingLog!.delete();
+                      getIt<MemoryRepository>().deleteMemory(widget.existingLog!);
                       Navigator.pop(context);
                     },
                   ),
@@ -181,22 +217,21 @@ class _MemoryEditorSheetState extends State<_MemoryEditorSheet> {
               width: double.infinity,
               height: 56,
               child: ElevatedButton(
-                onPressed: () {
+                onPressed: () async {
                   if (_controller.text.trim().isNotEmpty) {
+                    final memoryRepo = getIt<MemoryRepository>();
                     if (widget.existingLog == null) {
-                      widget.box.add(HealthLog(
+                      final newLog = HealthLog(
                         content: _controller.text.trim(),
                         isActive: true,
                         createdAt: DateTime.now(),
-                      ));
+                      );
+                      await memoryRepo.saveMemory(newLog);
                     } else {
-                      widget.box.put(widget.existingLog!.key, HealthLog(
-                        content: _controller.text.trim(),
-                        isActive: widget.existingLog!.isActive,
-                        createdAt: widget.existingLog!.createdAt,
-                      ));
+                      widget.existingLog!.content = _controller.text.trim();
+                      await memoryRepo.saveMemory(widget.existingLog!);
                     }
-                    Navigator.pop(context);
+                    if (mounted) Navigator.pop(context);
                   }
                 },
                 style: ElevatedButton.styleFrom(
@@ -217,9 +252,22 @@ class _MemoryEditorSheetState extends State<_MemoryEditorSheet> {
   }
 }
 
-class _MemoryTile extends StatelessWidget {
+class _MemoryTile extends StatefulWidget {
   final HealthLog log;
   const _MemoryTile({required this.log});
+
+  @override
+  State<_MemoryTile> createState() => _MemoryTileState();
+}
+
+class _MemoryTileState extends State<_MemoryTile> {
+  late bool _isActive;
+
+  @override
+  void initState() {
+    super.initState();
+    _isActive = widget.log.isActive;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -239,9 +287,9 @@ class _MemoryTile extends StatelessWidget {
       ),
         child: InkWell(
           borderRadius: BorderRadius.circular(24),
-          onTap: () {
-            final box = Hive.box<HealthLog>('health_logs');
-            MemoryVaultScreen._openMemoryEditor(context, box, existingLog: log);
+            onTap: () {
+            final box = getIt<MemoryRepository>().box;
+            MemoryVaultScreen._openMemoryEditor(context, box, existingLog: widget.log);
           },
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -253,25 +301,29 @@ class _MemoryTile extends StatelessWidget {
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                     icon: Icon(
-                      log.isActive ? Icons.psychology : Icons.psychology_outlined,
-                      color: log.isActive ? const Color(0xFF006B6B) : Colors.grey[500],
+                      _isActive ? Icons.psychology : Icons.psychology_outlined,
+                      color: _isActive ? const Color(0xFF006B6B) : Colors.grey[400],
                       size: 32,
                     ),
                     onPressed: () {
-                      log.isActive = !log.isActive;
-                      log.save();
+                      setState(() {
+                        _isActive = !_isActive;
+                      });
+                      
+                      widget.log.isActive = _isActive;
+                      getIt<MemoryRepository>().saveMemory(widget.log);
                       
                       ScaffoldMessenger.of(context).clearSnackBars();
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(
-                            log.isActive 
+                            _isActive 
                               ? "AI coach will refer to this memory" 
                               : "AI coach won't refer to this memory",
                             style: const TextStyle(fontWeight: FontWeight.w500),
                           ),
                           behavior: SnackBarBehavior.floating,
-                          backgroundColor: log.isActive ? const Color(0xFF006B6B) : Colors.grey[800],
+                          backgroundColor: _isActive ? const Color(0xFF006B6B) : Colors.grey[800],
                           duration: const Duration(seconds: 2),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           margin: const EdgeInsets.all(12),
@@ -286,19 +338,19 @@ class _MemoryTile extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        log.content,
+                        widget.log.content,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF1A1A1A),
+                          color: _isActive ? const Color(0xFF1A1A1A) : Colors.grey[500],
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        TimeFormatter.formatFullDateTime(log.createdAt),
-                        style: TextStyle(color: Colors.grey[600], fontSize: 11),
+                        TimeFormatter.formatFullDateTime(widget.log.createdAt),
+                        style: TextStyle(color: Colors.grey[400], fontSize: 11),
                       ),
                     ],
                   ),

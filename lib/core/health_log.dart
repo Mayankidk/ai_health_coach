@@ -13,7 +13,11 @@ class HealthLog extends HiveObject {
   @HiveField(2)
   DateTime createdAt;
 
+  @HiveField(3)
+  String? id;
+
   HealthLog({
+    this.id,
     required this.content,
     this.isActive = false,
     required this.createdAt,

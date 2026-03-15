@@ -22,6 +22,8 @@ class UserProfile {
   final String? name;
   @HiveField(8, defaultValue: 10000)
   final int dailyStepGoal;
+  @HiveField(9, defaultValue: false)
+  final bool onboardingCompleted;
 
   UserProfile({
     required this.userId,
@@ -33,6 +35,7 @@ class UserProfile {
     this.dietaryPreference = "None",
     this.name = "User",
     this.dailyStepGoal = 10000,
+    this.onboardingCompleted = false,
   });
 
   UserProfile copyWith({
@@ -45,6 +48,7 @@ class UserProfile {
     String? dietaryPreference,
     String? name,
     int? dailyStepGoal,
+    bool? onboardingCompleted,
   }) {
     return UserProfile(
       userId: userId ?? this.userId,
@@ -56,6 +60,7 @@ class UserProfile {
       dietaryPreference: dietaryPreference ?? this.dietaryPreference,
       name: name ?? this.name,
       dailyStepGoal: dailyStepGoal ?? this.dailyStepGoal,
+      onboardingCompleted: onboardingCompleted ?? this.onboardingCompleted,
     );
   }
 }

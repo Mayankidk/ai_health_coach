@@ -8,9 +8,9 @@ import '../../core/health_data.dart';
 class GeminiService {
   final String _apiKey;
   final List<String> _modelNames = [
-    'gemini-flash-latest',
-    'gemini-1.5-flash',
-    'gemini-2.0-flash',
+    'gemini-2.5-flash',
+    'gemini-2.5-pro',
+    'gemini-3-flash',
   ];
 
   GeminiService() : _apiKey = dotenv.env['GEMINI_API_KEY'] ?? '';
@@ -57,6 +57,7 @@ class GeminiService {
   Future<DailyPlan> generatePlan({
     required UserProfile profile,
     required HealthData healthData,
+    List<String>? activeLogs,
     String? additionalContext,
   }) async {
     return _retryWithFallback((model) async {
@@ -64,8 +65,13 @@ class GeminiService {
           ? "\nAdditional Context from User: $additionalContext"
           : "";
 
+      final memoryPart = activeLogs != null && activeLogs.isNotEmpty
+          ? "\nUSER PREFERENCES & HEALTH CONTEXT:\n${activeLogs.map((l) => "- $l").join("\n")}"
+          : "";
+ 
       final prompt = """
       Act as an elite health coach.
+      $memoryPart
       User Profile: Age ${profile.age}, Weight ${profile.weight}kg, Goal: ${profile.fitnessGoal}.
       Recent Data: Steps ${healthData.steps}, Sleep minutes ${healthData.sleepMinutes}, HRV ${healthData.hrv}.
       $contextPart
@@ -170,23 +176,22 @@ class GeminiService {
     return _retryWithFallback<List<String>>((model) async {
       final prompt = """
       Act as a health data analyst. 
-      Analyze the following User Message to extract NEW permanent health facts.
+      Analyze the following User Message to extract NEW health facts and preferences.
       
       User Message: "$userMessage"
       (Context - AI Response: "$aiResponse")
       
-      Task: Extract short, definitive, and complete bullet points ONLY if the USER explicitly shared NEW health information in the message above.
+      Task: Extract short, definitive bullet points ONLY if the USER shared NEW information.
       
-      CRITICAL RULES:
-      1. IGNORE any information that the AI mentioned (assume it is already known).
-      2. FOCUS ONLY on what the data the USER provided.
-      3. Extract facts like: allergies, injuries, medical conditions, specific goals, or dietary restrictions.
-      4. IGNORE temporary states (e.g., "I'm tired today") unless it implies a chronic issue.
+      CRITICAL CATEGORIZATION:
+      Prefix each fact with [AUTO] if it is a high-confidence personal declaration (e.g., "I am pure veg", "I have a knee injury", "My goal is...").
+      Use [SUGGEST] for general observations or lower confidence facts.
       
-      Format:
-      - Full sentence including context (e.g., "User has [condition]").
-      - No markdown, no intro text.
-      - Return EMPTY if no new permanent facts are found.
+      RULES:
+      1. IGNORE temporary states (e.g., "I'm tired today").
+      2. FOCUS on diet, injuries, chronic conditions, and hard preferences.
+      3. Format: "[TAG] User [fact]" (e.g., "[AUTO] User is pure veg").
+      4. return EMPTY if nothing new is found.
       """;
 
       final content = [Content('user', [TextPart(prompt)])];
@@ -204,50 +209,50 @@ class GeminiService {
     });
   }
 
-  /* 
   Future<String> getSmartNudge(UserProfile profile, HealthData healthData) async {
-    return _retryWithFallback<String>(() async {
+    return _retryWithFallback<String>((model) async {
       final prompt = """
       Act as an elite health coach.
       User Goal: ${profile.fitnessGoal}.
       Today's Steps: ${healthData.steps}, Sleep: ${healthData.sleepMinutes} min.
       
-      Generate a very short, punchy, and motivational "nudge" (maximum 2 sentences) to keep the user on track.
-      If they are doing great, praise them. If they are lagging (e.g. low steps), give a specific tip to improve.
+      Task: Provide a very SHORT (3-8 words), DIRECT health command.
+      - Use a "command" tone (e.g., "Walk 15 minutes now." or "Drink 500ml water immediately.")
+      - MUST be specific: include a number, duration, or distance.
+      - NO explanations, NO fluff. Just the directive.
       Return ONLY the text of the nudge.
       """;
 
       final content = [Content.text(prompt)];
-      final response = await _model.generateContent(content);
-      return response.text?.trim() ?? "Keep pushing towards your goals!";
+      final response = await model.generateContent(content);
+      return response.text?.trim() ?? "Walk 10 minutes right now!";
     });
   }
-  */
 
   Future<String> generateDailyInsight({
     required UserProfile profile,
     required HealthData healthData,
+    String? currentTime,
   }) async {
     return _retryWithFallback<String>((model) async {
       final progress = (healthData.steps / (profile.dailyStepGoal > 0 ? profile.dailyStepGoal : 10000) * 100).round();
+      final timeStr = currentTime ?? "current time";
       
       final prompt = """
       Act as an elite health coach.
+      Current Time: $timeStr
       User Profile: Goal ${profile.fitnessGoal}.
       Today's Data: ${healthData.steps} steps ($progress% of goal), ${healthData.sleepMinutes}m sleep, ${healthData.hrv}ms HRV.
 
-      Task: Provide a ONE-SENTENCE, highly personalized daily insight.
-      - Focus on performance, momentum, and achieving goals.
-      - If steps are low, give a high-energy tip to get moving.
-      - If HRV/Sleep is low, suggest how to optimize their energy for the day's tasks.
-      - If they are crushing it, give a "power-tip" to exceed their limits.
-      - Be punchy, motivating, and elite.
-      - Return ONLY the insight text. No intro, no markdown.
+      Task: Provide a single, powerful motivational "nudge" sentence (maximum 15 words).
+      - Make it a 1-liner that connects their current data to their goal.
+      - Be highly inspiring.
+      - Return ONLY the exact sentence text.
       """;
 
       final content = [Content('user', [TextPart(prompt)])];
       final response = await model.generateContent(content);
-      return response.text?.trim() ?? "You're at $progress% of your goal—let's find a way to get those extra steps in!";
+      return response.text?.trim() ?? "You're at $progress% of your goal—keep the momentum going and crush it today!";
     });
   }
 

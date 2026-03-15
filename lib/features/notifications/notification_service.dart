@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/foundation.dart';
+import 'package:timezone/data/latest_all.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
+import 'dart:io';
 
 class NotificationService {
   final FlutterLocalNotificationsPlugin _localNotifications =
@@ -9,14 +12,112 @@ class NotificationService {
   // For Web/In-App notifications
   static final GlobalKey<ScaffoldMessengerState> messengerKey = GlobalKey<ScaffoldMessengerState>();
 
-  Future<void> init() async {
+  Future<void> init({bool requestPermissions = true}) async {
     if (kIsWeb) return;
     
+    // Initialize Timezone
+    tz.initializeTimeZones();
+    
     const androidSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+        AndroidInitializationSettings('@mipmap/launcher_icon');
     const initSettings = InitializationSettings(android: androidSettings);
 
-    await _localNotifications.initialize(initSettings);
+    await _localNotifications.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: (details) {
+        if (kDebugMode) {
+          print("Notification tapped: ${details.payload}");
+        }
+      },
+    );
+
+    // Request permissions for Android 13+ only if requested and not in background
+    if (Platform.isAndroid && requestPermissions) {
+      try {
+        final androidImpl = _localNotifications
+            .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+            
+        await androidImpl?.requestNotificationsPermission();
+        await androidImpl?.requestExactAlarmsPermission();
+      } catch (e) {
+        if (kDebugMode) {
+          print("NotificationService: Error requesting permission: $e");
+        }
+      }
+    }
+  }
+
+  Future<void> scheduleDailyNotification({
+    required int id,
+    required String title,
+    required String body,
+    required int hour,
+    required int minute,
+  }) async {
+    if (kIsWeb) return;
+
+    if (kDebugMode) {
+      print("NotificationService: Scheduling daily notification '$title' at $hour:$minute");
+    }
+
+    try {
+      await _localNotifications.zonedSchedule(
+        id,
+        title,
+        body,
+        _nextInstanceOfTime(hour, minute),
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'daily_nudges',
+            'Daily Nudges',
+            channelDescription: 'Scheduled reminders and health tips',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+        ),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        matchDateTimeComponents: DateTimeComponents.time,
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        print("NotificationService: Failed to schedule daily notification: $e");
+      }
+      
+      // Fallback to non-exact if exact fails
+      if (e.toString().contains('exact_alarms_not_permitted')) {
+        await _localNotifications.zonedSchedule(
+          id,
+          title,
+          body,
+          _nextInstanceOfTime(hour, minute),
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'daily_nudges',
+              'Daily Nudges',
+              channelDescription: 'Scheduled reminders and health tips',
+              importance: Importance.high,
+              priority: Priority.high,
+            ),
+          ),
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+          matchDateTimeComponents: DateTimeComponents.time,
+        );
+      }
+    }
+  }
+
+  tz.TZDateTime _nextInstanceOfTime(int hour, int minute) {
+    final tz.TZDateTime now = tz.TZDateTime.now(tz.local);
+    tz.TZDateTime scheduledDate =
+        tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
+    if (scheduledDate.isBefore(now)) {
+      scheduledDate = scheduledDate.add(const Duration(days: 1));
+    }
+    return scheduledDate;
+  }
+
+  Future<void> cancelAll() async {
+    await _localNotifications.cancelAll();
   }
 
   Future<void> showNudge(String title, String body) async {
@@ -26,9 +127,9 @@ class NotificationService {
     }
 
     const androidDetails = AndroidNotificationDetails(
-      'daily_nudges',
-      'Daily Nudges',
-      channelDescription: 'Reminders for workouts and habits',
+      'immediate_nudges',
+      'Immediate Nudges',
+      channelDescription: 'One-off notifications',
       importance: Importance.high,
       priority: Priority.high,
     );

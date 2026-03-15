@@ -74,11 +74,12 @@ class AuthService {
     }
   }
 
-  Future<void> signUp(String email, String password) async {
+  Future<void> signUp(String email, String password, {String? displayName}) async {
     try {
       await _client.auth.signUp(
         email: email,
         password: password,
+        data: displayName != null ? {'display_name': displayName} : null,
       );
     } catch (e) {
       print("Sign up error: $e");
@@ -89,6 +90,9 @@ class AuthService {
   Future<void> signOut() async {
     try {
       await _client.auth.signOut();
+      if (!kIsWeb) {
+        await GoogleSignIn().signOut();
+      }
     } catch (e) {
       print("Sign out error: $e");
     }

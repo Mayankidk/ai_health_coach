@@ -40,11 +40,14 @@ class PlanItem {
   final String description;
   @HiveField(2)
   final String details;
+  @HiveField(3, defaultValue: false)
+  final bool isCompleted;
 
   PlanItem({
     required this.type,
     required this.description,
     required this.details,
+    this.isCompleted = false,
   });
 
   factory PlanItem.fromJson(Map<String, dynamic> json) {
@@ -52,6 +55,21 @@ class PlanItem {
       type: json['type'] ?? 'other',
       description: json['description'] ?? '',
       details: json['details'] ?? '',
+      isCompleted: json['isCompleted'] ?? false,
+    );
+  }
+
+  PlanItem copyWith({
+    String? type,
+    String? description,
+    String? details,
+    bool? isCompleted,
+  }) {
+    return PlanItem(
+      type: type ?? this.type,
+      description: description ?? this.description,
+      details: details ?? this.details,
+      isCompleted: isCompleted ?? this.isCompleted,
     );
   }
 }

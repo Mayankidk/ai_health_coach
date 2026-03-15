@@ -8,8 +8,8 @@ import 'features/auth/onboarding_screen.dart';
 import 'features/dashboard/dashboard_screen.dart';
 import 'features/notifications/notification_service.dart';
 import 'core/user_repo.dart';
+import 'core/user_profile.dart';
 import 'core/health_repository.dart';
-
 import 'package:workmanager/workmanager.dart';
 
 @pragma('vm:entry-point')
@@ -17,10 +17,13 @@ void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     try {
       // Initialize services for background environment
-      await setupServices();
+      await setupServices(isBackground: true);
+      
+      // ONLY sync health data. Do NOT schedule nudges (which touch alarms).
       final healthRepo = GetIt.I<HealthRepository>();
       await healthRepo.syncFromWearables();
-      print("Background Task: Health sync successful");
+      
+      print("Background Task: Lightweight Health sync successful");
       return Future.value(true);
     } catch (e) {
       print("Background Task Error: $e");
@@ -28,6 +31,7 @@ void callbackDispatcher() {
     }
   });
 }
+
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,7 +43,7 @@ void main() {
         isInDebugMode: false,
       );
     } catch (e) {
-      print("Workmanager initialization failed: $e. This is expected if you haven't performed a full rebuild yet.");
+      print("Workmanager init failed (expected before full rebuild): $e");
     }
   }
 
@@ -52,7 +56,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'AI Health Coach',
+      title: 'Neuralis',
       debugShowCheckedModeBanner: false,
       scaffoldMessengerKey: NotificationService.messengerKey,
       theme: ThemeData(
@@ -117,7 +121,7 @@ class InitScreen extends StatefulWidget {
 }
 
 class _InitScreenState extends State<InitScreen> {
-  late Future<void> _initFuture;
+  late Future<dynamic> _initFuture;
 
   @override
   void initState() {
@@ -125,25 +129,34 @@ class _InitScreenState extends State<InitScreen> {
     _initFuture = _initializeApp();
   }
 
-  Future<void> _initializeApp() async {
-    await setupServices();
+  Future<dynamic> _initializeApp() async {
+    await setupServices(isBackground: false);
     
-    // Register background task
+    // Register a very lightweight background task
     if (!kIsWeb) {
       try {
         await Workmanager().registerPeriodicTask(
-          "periodic-health-sync",
+          "lightweight-health-sync",
           "syncHealthData",
-          frequency: const Duration(minutes: 15),
-          existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
+          frequency: const Duration(hours: 4), // 4 hours prevents aggressive polling
+          existingWorkPolicy: ExistingPeriodicWorkPolicy.update,
           constraints: Constraints(
             networkType: NetworkType.connected,
+            requiresBatteryNotLow: true, // Crucial to prevent phone crashing
+            requiresDeviceIdle: false,
           ),
         );
       } catch (e) {
         print("Workmanager registration failed: $e");
       }
     }
+
+    // Pre-fetch profile if authenticated to make transition seamless
+    final authService = GetIt.I<AuthService>();
+    if (authService.isAuthenticated) {
+      return await GetIt.I<UserRepository>().ensureProfileSynced(authService.userId!);
+    }
+    return null;
   }
 
   @override
@@ -155,52 +168,10 @@ class _InitScreenState extends State<InitScreen> {
           return Scaffold(
             backgroundColor: Colors.white,
             body: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0.5, end: 1.0),
-                    duration: const Duration(milliseconds: 800),
-                    curve: Curves.easeInOut,
-                    builder: (ctx, val, child) => Opacity(
-                      opacity: val,
-                      child: Transform.scale(
-                        scale: val,
-                        child: Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            color: Colors.grey[100],
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.favorite,
-                            color: Color(0xFF757575),
-                            size: 48,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  const Text(
-                    "AI Health Coach",
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -1,
-                      color: Color(0xFF1A1A1A),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.grey[400]!),
-                    ),
-                  ),
-                ],
+              child: Image.asset(
+                'assets/images/logo_white.png',
+                width: 150,
+                height: 150,
               ),
             ),
           );
@@ -229,7 +200,7 @@ class _InitScreenState extends State<InitScreen> {
                     const SizedBox(height: 24),
                     ElevatedButton(
                       onPressed: () => setState(() {
-                        _initFuture = setupServices();
+                        _initFuture = setupServices(isBackground: false);
                       }),
                       child: const Text("Retry"),
                     ),
@@ -240,13 +211,17 @@ class _InitScreenState extends State<InitScreen> {
           );
         }
 
-        return const AuthWrapper();
+        return AuthWrapper(
+          prefetchedProfile: snapshot.data is UserProfile ? snapshot.data as UserProfile : null,
+        );
       },
     );
   }
 }
+
 class AuthWrapper extends StatefulWidget {
-  const AuthWrapper({super.key});
+  final UserProfile? prefetchedProfile;
+  const AuthWrapper({super.key, this.prefetchedProfile});
 
   @override
   State<AuthWrapper> createState() => _AuthWrapperState();
@@ -262,16 +237,31 @@ class _AuthWrapperState extends State<AuthWrapper> {
       return const LoginScreen();
     }
 
+    if (widget.prefetchedProfile != null) {
+      if (!widget.prefetchedProfile!.onboardingCompleted) {
+        return const OnboardingScreen();
+      }
+      return const DashboardScreen();
+    }
+
     return FutureBuilder(
       future: userRepo.ensureProfileSynced(authService.userId!),
       builder: (context, profileSnapshot) {
         if (profileSnapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
+          return Scaffold(
+            backgroundColor: Colors.white,
+            body: Center(
+              child: Image.asset(
+                'assets/images/logo_white.png',
+                width: 150,
+                height: 150,
+              ),
+            ),
           );
         }
         
-        if (profileSnapshot.data == null) {
+        final profile = profileSnapshot.data;
+        if (profile == null || !profile.onboardingCompleted) {
           return const OnboardingScreen();
         }
         

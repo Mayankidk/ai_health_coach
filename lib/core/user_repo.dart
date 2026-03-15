@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'user_profile.dart';
+import 'services.dart';
+import '../features/notifications/nudge_service.dart';
 
 class UserRepository {
   final Box<UserProfile> _profileBox = Hive.box<UserProfile>('user_profile');
@@ -27,6 +30,7 @@ class UserRepository {
         'name': profile.name,
         'goals': profile.goals,
         'daily_step_goal': profile.dailyStepGoal,
+        'onboarding_completed': profile.onboardingCompleted,
         'updated_at': DateTime.now().toIso8601String(),
       };
       print("UserRepository: Attempting Supabase sync for ${profile.userId}: $updateMap");
@@ -56,6 +60,7 @@ class UserRepository {
         name: response['name'] ?? "User",
         goals: List<String>.from(response['goals'] ?? []),
         dailyStepGoal: response['daily_step_goal'] ?? 10000,
+        onboardingCompleted: response['onboarding_completed'] ?? false,
       );
       await _profileBox.put(userId, profile);
       return profile;
@@ -68,14 +73,27 @@ class UserRepository {
   Future<UserProfile?> ensureProfileSynced(String userId) async {
     final localProfile = getProfile(userId);
     
-    // 1. If local exists, try to push to Supabase in case it's missing there
+    // 1. If local exists, return it immediately and sync in background
     if (localProfile != null) {
-      await saveProfile(localProfile);
+      print("UserRepository: Local profile found. Optimistic boot triggered.");
+      // Trigger non-blocking background sync
+      unawaited(saveProfile(localProfile));
+      _scheduleNudges();
       return localProfile;
     }
 
-    // 2. If local missing, try to fetch from Supabase
-    return await fetchRemoteProfile(userId);
+    // 2. If local missing, we MUST wait for Supabase (First time login)
+    print("UserRepository: No local profile. Fetching from remote...");
+    final remoteProfile = await fetchRemoteProfile(userId);
+    if (remoteProfile != null) {
+      _scheduleNudges();
+    }
+    return remoteProfile;
+  }
+
+  void _scheduleNudges() {
+    // Lazy trigger nudge scheduling
+    Future.microtask(() => getIt<NudgeService>().scheduleDailyNudges());
   }
 
   // Expose listenable for reactive UI updates

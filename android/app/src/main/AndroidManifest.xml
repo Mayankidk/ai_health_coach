@@ -1,6 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <uses-permission android:name="android.permission.BLUETOOTH"/>
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>
@@ -12,17 +13,41 @@
     <uses-permission android:name="android.permission.health.READ_STEPS"/>
     <uses-permission android:name="android.permission.health.WRITE_STEPS"/>
     <uses-permission android:name="android.permission.health.READ_HEART_RATE"/>
+    <uses-permission android:name="android.permission.health.WRITE_HEART_RATE"/>
     <uses-permission android:name="android.permission.health.READ_SLEEP"/>
+    <uses-permission android:name="android.permission.health.WRITE_SLEEP"/>
+    <uses-permission android:name="android.permission.health.READ_ACTIVE_ENERGY_BURNED"/>
+    <uses-permission android:name="android.permission.health.WRITE_ACTIVE_ENERGY_BURNED"/>
+    <uses-permission android:name="android.permission.health.READ_EXERCISE"/>
+    <uses-permission android:name="android.permission.health.WRITE_EXERCISE"/>
+    <uses-permission android:name="android.permission.health.READ_BASAL_METABOLIC_RATE"/>
+    <uses-permission android:name="android.permission.health.WRITE_BASAL_METABOLIC_RATE"/>
+    <uses-permission android:name="android.permission.health.READ_DISTANCE"/>
+    <uses-permission android:name="android.permission.health.WRITE_DISTANCE"/>
+    <uses-permission android:name="android.permission.health.READ_TOTAL_CALORIES_BURNED"/>
+    <uses-permission android:name="android.permission.health.WRITE_TOTAL_CALORIES_BURNED"/>
 
     <!-- Health Connect Permissions (Legacy/Support App) -->
     <uses-permission android:name="androidx.health.permission.READ_STEPS"/>
     <uses-permission android:name="androidx.health.permission.WRITE_STEPS"/>
     <uses-permission android:name="androidx.health.permission.READ_HEART_RATE"/>
+    <uses-permission android:name="androidx.health.permission.WRITE_HEART_RATE"/>
     <uses-permission android:name="androidx.health.permission.READ_SLEEP"/>
+    <uses-permission android:name="androidx.health.permission.WRITE_SLEEP"/>
+    <uses-permission android:name="androidx.health.permission.READ_ACTIVE_ENERGY_BURNED"/>
+    <uses-permission android:name="androidx.health.permission.WRITE_ACTIVE_ENERGY_BURNED"/>
+    <uses-permission android:name="androidx.health.permission.READ_BASAL_METABOLIC_RATE"/>
+    <uses-permission android:name="androidx.health.permission.WRITE_BASAL_METABOLIC_RATE"/>
+    <uses-permission android:name="androidx.health.permission.READ_DISTANCE"/>
+    <uses-permission android:name="androidx.health.permission.WRITE_DISTANCE"/>
+    <uses-permission android:name="androidx.health.permission.READ_EXERCISE"/>
+    <uses-permission android:name="androidx.health.permission.WRITE_EXERCISE"/>
+    <uses-permission android:name="androidx.health.permission.READ_TOTAL_CALORIES_BURNED"/>
+    <uses-permission android:name="androidx.health.permission.WRITE_TOTAL_CALORIES_BURNED"/>
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <application
-        android:label="ai_health_coach_app"
+        android:label="Neuralis"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon">
         <activity
@@ -54,14 +79,20 @@
             <intent-filter>
                 <action android:name="androidx.health.platform.client.ACTION_SHOW_PERMISSIONS_RATIONALE" />
             </intent-filter>
+            
+            <!-- Health Connect Intent Filter (Required for Android 14+ Native Health Connect) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
         </activity>
 
         <meta-data android:name="health_permissions_rationale_activity" 
-                   android:value=".MainActivity" />
+                   android:value="com.aihealthcoach.ai_health_coach_app.MainActivity" />
         
-        <!-- This specific tag is often needed for the Android 12 Beta app -->
+        <!-- Health Connect Permission Metadata -->
         <meta-data android:name="androidx.health.metadata.ANT_ATTRIBUTES" 
-                   android:value="Steps,HeartRate,Sleep" />
+                   android:value="Steps,HeartRate,Sleep,ActiveEnergyBurned,Distance,Exercise" />
 
         <meta-data android:name="androidx.health.PRIVACY_POLICY_URL" 
                    android:value="https://ai-health-coach.example.com/privacy" />
