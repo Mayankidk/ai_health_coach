@@ -23,7 +23,10 @@ Neuralis is a state-of-the-art health companion that transforms your data into a
    git clone https://github.com/Mayankidk/ai_health_coach.git
    ```
 2. **Setup environment**:
-   Create a `.env` file in the root with your API keys.
+   Copy the `.env.example` file to `.env` and fill in your API keys:
+   ```bash
+   cp .env.example .env
+   ```
 3. **Install dependencies**:
    ```bash
    flutter pub get
