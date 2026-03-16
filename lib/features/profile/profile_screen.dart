@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:get_it/get_it.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../../core/user_repo.dart';
@@ -7,7 +8,9 @@ import '../../core/user_profile.dart';
 import '../auth/login_screen.dart';
 import '../devices/device_settings_screen.dart';
 import '../dashboard/step_goal_editor.dart';
-import '../dashboard/activity_chart.dart';
+import '../admin/admin_screen.dart';
+
+const String _kAdminEmail = 'mayanksingh11012006@gmail.com';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -22,7 +25,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _notificationsEnabled = true;
 
   Future<void> _editField(String field) async {
-    final currentProfile = userRepo.getProfile(authService.userId!);
+    final userId = authService.userId;
+    if (userId == null) return;
+    
+    final currentProfile = userRepo.getProfile(userId);
     if (currentProfile == null) return;
 
     // Temporary variables for the specific field being edited
@@ -113,7 +119,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _buildDropdown(
                   "Primary Goal",
                   tempGoal,
-                  ["General Health", "Build Muscle", "Lose Weight", "Improve Cardio", "Reduce Stress"],
+                  ["General Health", "Build Muscle", "Lose Weight", "Improve Cardio", "Reduce Stress", "Improve Sleep"],
                   (v) => setModalState(() => tempGoal = v!),
                 ),
               if (field == "Step Goal")
@@ -185,6 +191,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildDropdown(String label, String value, List<String> items, ValueChanged<String?> onChanged) {
+    // Robustness: Ensure value is in the items list to prevent DropdownButton assertion crash
+    final effectiveItems = List<String>.from(items);
+    if (value.isNotEmpty && !effectiveItems.contains(value)) {
+      effectiveItems.add(value);
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -199,9 +211,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
-              value: value,
+              value: value.isEmpty ? (effectiveItems.isNotEmpty ? effectiveItems.first : null) : value,
               isExpanded: true,
-              items: items.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+              items: effectiveItems.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
               onChanged: onChanged,
               dropdownColor: Colors.white,
               borderRadius: BorderRadius.circular(12),
@@ -217,9 +229,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return ValueListenableBuilder<Box<UserProfile>>(
       valueListenable: userRepo.getListenable(),
       builder: (context, box, _) {
-        final profile = box.get(authService.userId!);
+        final userId = authService.userId;
+        if (userId == null) return const SizedBox.shrink();
+
+        final profile = box.get(userId);
         final user = authService.currentUser;
-        final displayName = (profile?.name != null && profile!.name!.isNotEmpty) 
+        
+        if (kDebugMode) {
+          print("ProfileScreen: Checking admin access for: ${user?.email}");
+        }
+
+        final displayName = (profile != null && profile.name != null && profile.name!.isNotEmpty) 
             ? profile.name! 
             : (user?.email?.split('@')[0] ?? "User");
 
@@ -255,7 +275,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Expanded(
                     child: _StatCard(
                       label: "Weight",
-                      value: "${profile?.weight.toStringAsFixed(0) ?? '--'}",
+                      value: profile?.weight.toStringAsFixed(0) ?? '--',
                       unit: "kg",
                       icon: Icons.monitor_weight,
                       color: Colors.orange,
@@ -319,7 +339,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 trailing: Switch(
                   value: _notificationsEnabled,
                   onChanged: (v) => setState(() => _notificationsEnabled = v),
-                  activeColor: const Color(0xFF006B6B),
+                  activeThumbColor: const Color(0xFF006B6B),
+                  activeTrackColor: const Color(0xFF006B6B).withAlpha(100),
                 ),
               ),
               const SizedBox(height: 12),
@@ -334,6 +355,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   );
                 },
               ),
+              // Admin Panel — only visible to admin user
+              if (authService.currentUser?.email == _kAdminEmail) ...[  
+                const SizedBox(height: 12),
+                _MenuTile(
+                  title: "Admin Panel",
+                  icon: Icons.admin_panel_settings_rounded,
+                  color: const Color(0xFF4A00E0),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const AdminScreen()),
+                    );
+                  },
+                ),
+              ],
               const SizedBox(height: 12),
               _MenuTile(
                 title: "Log Out",
@@ -366,7 +402,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
 
     if (confirmed == true) {
+      final userId = authService.userId;
       await authService.signOut();
+      if (userId != null) {
+        await userRepo.deleteProfileLocally(userId);
+      }
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const LoginScreen()),

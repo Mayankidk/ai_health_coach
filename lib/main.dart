@@ -237,12 +237,17 @@ class _AuthWrapperState extends State<AuthWrapper> {
       return const LoginScreen();
     }
 
-    if (widget.prefetchedProfile != null) {
+    final currentUserId = authService.userId;
+    
+    // Only use prefetched profile if it belongs to the currently logged in user
+    if (widget.prefetchedProfile != null && widget.prefetchedProfile!.userId == currentUserId) {
       if (!widget.prefetchedProfile!.onboardingCompleted) {
         return const OnboardingScreen();
       }
       return const DashboardScreen();
     }
+
+    if (currentUserId == null) return const LoginScreen();
 
     return FutureBuilder(
       future: userRepo.ensureProfileSynced(authService.userId!),

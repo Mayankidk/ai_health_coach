@@ -96,6 +96,10 @@ class UserRepository {
     Future.microtask(() => getIt<NudgeService>().scheduleDailyNudges());
   }
 
+  Future<void> deleteProfileLocally(String userId) async {
+    await _profileBox.delete(userId);
+  }
+
   // Expose listenable for reactive UI updates
   ValueListenable<Box<UserProfile>> getListenable() {
     return _profileBox.listenable();
