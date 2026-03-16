@@ -8,9 +8,7 @@ import '../../core/health_data.dart';
 class GeminiService {
   final String _apiKey;
   final List<String> _modelNames = [
-    'gemini-2.5-flash',
-    'gemini-2.5-pro',
-    'gemini-3-flash',
+    'gemini-flash-latest',
   ];
 
   GeminiService() : _apiKey = dotenv.env['GEMINI_API_KEY'] ?? '';
