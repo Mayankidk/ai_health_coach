@@ -27,6 +27,10 @@ jobs:
       - name: Enable Web
         run: flutter config --enable-web
 
+      - name: Setup .env
+        run: cp .env.example .env
+
+
       - name: Install dependencies
         run: flutter pub get
 
