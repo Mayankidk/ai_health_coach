@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 
-enum ActivityDataType { steps, distance, calories }
+enum ActivityDataType { steps, distance, calories, sleep, hrv }
+
 
 class ActivityChart extends StatefulWidget {
   final List<num> data;
@@ -49,20 +50,32 @@ class _ActivityChartState extends State<ActivityChart> with TickerProviderStateM
       return value.toInt().toString();
     } else if (widget.type == ActivityDataType.distance) {
       return "${value.toStringAsFixed(2)} km";
+    } else if (widget.type == ActivityDataType.sleep) {
+      final hours = value ~/ 60;
+      final mins = (value % 60).toInt();
+      return "${hours}h ${mins}m";
+    } else if (widget.type == ActivityDataType.hrv) {
+      return "${value.toInt()} ms";
     } else {
       return "${value.toInt()} kcal";
     }
   }
+
 
   String _getLabel(num value) {
     if (widget.type == ActivityDataType.steps) {
       return value == 0 ? "0" : "${(value ~/ 1000)}k";
     } else if (widget.type == ActivityDataType.distance) {
       return value == 0 ? "0" : "${value.toStringAsFixed(1)}k";
+    } else if (widget.type == ActivityDataType.sleep) {
+      return "${(value / 60).toStringAsFixed(0)}h";
+    } else if (widget.type == ActivityDataType.hrv) {
+      return "${value.toInt()}";
     } else {
       return value == 0 ? "0" : "${(value ~/ 100)}h"; // 'h' for hundreds? Maybe just the number
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -80,9 +93,14 @@ class _ActivityChartState extends State<ActivityChart> with TickerProviderStateM
       interval = 2000;
     } else if (widget.type == ActivityDataType.distance) {
       interval = 2.0;
+    } else if (widget.type == ActivityDataType.sleep) {
+      interval = 120; // 2 hours
+    } else if (widget.type == ActivityDataType.hrv) {
+      interval = 20.0;
     } else {
       interval = 500.0;
     }
+
 
     double chartMax = ((effectiveMax / interval).ceil() * interval).toDouble();
     if (chartMax == effectiveMax) chartMax += interval;
@@ -96,10 +114,18 @@ class _ActivityChartState extends State<ActivityChart> with TickerProviderStateM
     } else if (widget.type == ActivityDataType.distance) {
       title = "Weekly Distance";
       accentColor = Colors.blue;
+    } else if (widget.type == ActivityDataType.sleep) {
+      title = "Weekly Sleep";
+      accentColor = Colors.lightBlue;
+    } else if (widget.type == ActivityDataType.hrv) {
+      title = "Weekly HRV";
+      accentColor = Colors.red;
     } else {
+
       title = "Weekly Calories";
       accentColor = Colors.orange;
     }
+
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -276,17 +302,15 @@ class _ActivityChartState extends State<ActivityChart> with TickerProviderStateM
                                         height: isSelected ? 16 : (isToday ? 14 : 10),
                                         width: chartMax > 0 ? (val / chartMax) * chartWidth : 0,
                                         decoration: BoxDecoration(
-                                          color: hitGoal
+                                          color: hitGoal && widget.type == ActivityDataType.steps
                                             ? const Color(0xFF00BFA5) 
                                             : accentColor.withOpacity(isToday ? 1.0 : 0.6),
                                           borderRadius: BorderRadius.circular(8),
-                                          boxShadow: (hitGoal || isSelected) ? [
-                                            BoxShadow(
-                                              color: (hitGoal ? const Color(0xFF00BFA5) : accentColor).withOpacity(0.3),
-                                              blurRadius: 8,
-                                              offset: const Offset(0, 2),
-                                            )
-                                          ] : [],
+
+                                          boxShadow: const [],
+
+
+
                                         ),
                                       ),
                                     ),
@@ -339,8 +363,11 @@ class _ActivityChartState extends State<ActivityChart> with TickerProviderStateM
   String _formatGoal(num goal) {
     if (widget.type == ActivityDataType.steps) return "${goal ~/ 1000}k";
     if (widget.type == ActivityDataType.distance) return "${goal.toStringAsFixed(1)} km";
+    if (widget.type == ActivityDataType.sleep) return "${goal ~/ 60}h";
+    if (widget.type == ActivityDataType.hrv) return "${goal.toInt()} ms";
     return "${goal.toInt()} kcal";
   }
+
 
   String _getGridLabel(num value) {
     if (widget.type == ActivityDataType.steps) {
@@ -349,8 +376,15 @@ class _ActivityChartState extends State<ActivityChart> with TickerProviderStateM
     if (widget.type == ActivityDataType.distance) {
       return value == 0 ? "0" : value.toStringAsFixed(1);
     }
+    if (widget.type == ActivityDataType.sleep) {
+      return "${(value / 60).toStringAsFixed(0)}h";
+    }
+    if (widget.type == ActivityDataType.hrv) {
+      return value.toInt().toString();
+    }
     return value.toInt().toString();
   }
+
 
   String _getDayLabel(DateTime date) {
     final days = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];

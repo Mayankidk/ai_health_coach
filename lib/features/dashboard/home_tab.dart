@@ -30,6 +30,9 @@ class _HomeTabState extends State<HomeTab> {
   List<int> _weeklySteps = [];
   List<double> _weeklyDistance = [];
   List<double> _weeklyCalories = [];
+  List<int> _weeklySleep = [];
+  List<double> _weeklyHRV = [];
+
   String _trendAnalysis = "Tap the refresh icon to get a deep-dive analysis of your weekly movement.";
   String? _insightTimestamp;
   String? _dailyInsight;
@@ -58,14 +61,19 @@ class _HomeTabState extends State<HomeTab> {
     final steps = await _healthRepo.getWeeklySteps();
     final distance = await _healthRepo.getWeeklyDistance();
     final calories = await _healthRepo.getWeeklyCalories();
+    final sleep = await _healthRepo.getWeeklySleep();
+    final hrv = await _healthRepo.getWeeklyHRV();
     if (mounted) {
       setState(() {
         _weeklySteps = steps;
         _weeklyDistance = distance;
         _weeklyCalories = calories;
+        _weeklySleep = sleep;
+        _weeklyHRV = hrv;
         _trendAnalysis = "Keep up the great momentum! Tracking your steps every day is the first step to success.";
       });
     }
+
   }
 
   Future<void> _handleRefresh({bool silent = false}) async {
@@ -295,8 +303,11 @@ class _HomeTabState extends State<HomeTab> {
     List<int> stepHistory, 
     List<double> distHistory, 
     List<double> calHistory, 
+    List<int> sleepHistory,
+    List<double> hrvHistory,
     UserProfile? profile
   ) async {
+
     int tempGoal = profile?.dailyStepGoal ?? 10000;
     
     // Load last insight from Hive
@@ -402,6 +413,23 @@ class _HomeTabState extends State<HomeTab> {
                         goal: 2000,
                         type: ActivityDataType.calories,
                       ),
+
+                      const SizedBox(height: 24),
+                      // 4. Sleep Chart
+                      ActivityChart(
+                        data: sleepHistory,
+                        goal: 480, // 8 hours
+                        type: ActivityDataType.sleep,
+                      ),
+
+                      const SizedBox(height: 24),
+                      // 5. HRV Chart
+                      ActivityChart(
+                        data: hrvHistory,
+                        goal: 60.0, // Example baseline
+                        type: ActivityDataType.hrv,
+                      ),
+
 
                       const SizedBox(height: 24),
                       // AI Insights Section
@@ -559,12 +587,17 @@ class _HomeTabState extends State<HomeTab> {
             final currentHistorySteps = List<int>.from(_weeklySteps);
             final currentHistoryDist = List<double>.from(_weeklyDistance);
             final currentHistoryCals = List<double>.from(_weeklyCalories);
+            final currentHistorySleep = List<int>.from(_weeklySleep);
+            final currentHistoryHRV = List<double>.from(_weeklyHRV);
             
             if (data != null) {
               if (currentHistorySteps.isNotEmpty) currentHistorySteps[currentHistorySteps.length - 1] = data.steps;
               if (currentHistoryDist.isNotEmpty) currentHistoryDist[currentHistoryDist.length - 1] = data.distanceKm;
               if (currentHistoryCals.isNotEmpty) currentHistoryCals[currentHistoryCals.length - 1] = data.activeEnergyBurned ?? 0.0;
+              if (currentHistorySleep.isNotEmpty) currentHistorySleep[currentHistorySleep.length - 1] = data.sleepMinutes;
+              if (currentHistoryHRV.isNotEmpty) currentHistoryHRV[currentHistoryHRV.length - 1] = data.hrv ?? 0.0;
             }
+
 
             return CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
@@ -666,8 +699,11 @@ class _HomeTabState extends State<HomeTab> {
                               currentHistorySteps, 
                               currentHistoryDist, 
                               currentHistoryCals, 
+                              currentHistorySleep,
+                              currentHistoryHRV,
                               profile
                             ),
+
                           ),
                           //const SizedBox(height: 16),
                           Row(

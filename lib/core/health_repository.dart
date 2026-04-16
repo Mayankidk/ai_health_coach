@@ -366,6 +366,51 @@ class HealthRepository {
     }
     return calories;
   }
+  
+  Future<List<int>> getWeeklySleep() async {
+    final List<int> sleep = [];
+    final today = DateTime.now();
+    
+    for (int i = 6; i >= 0; i--) {
+      final date = today.subtract(Duration(days: i));
+      final dateStr = date.toIso8601String().split('T')[0];
+      final saved = _box?.get(dateStr);
+      
+      if (saved != null) {
+        sleep.add(saved.sleepMinutes);
+      } else {
+        if (kIsWeb) {
+          sleep.add(360 + Random().nextInt(240));
+        } else {
+          sleep.add(0);
+        }
+      }
+    }
+    return sleep;
+  }
+
+  Future<List<double>> getWeeklyHRV() async {
+    final List<double> hrv = [];
+    final today = DateTime.now();
+    
+    for (int i = 6; i >= 0; i--) {
+      final date = today.subtract(Duration(days: i));
+      final dateStr = date.toIso8601String().split('T')[0];
+      final saved = _box?.get(dateStr);
+      
+      if (saved != null) {
+        hrv.add(saved.hrv ?? 0.0);
+      } else {
+        if (kIsWeb) {
+          hrv.add(50.0 + Random().nextInt(40).toDouble());
+        } else {
+          hrv.add(0.0);
+        }
+      }
+    }
+    return hrv;
+  }
+
 
   Future<void> openHealthConnectApp() async {
     print("HealthRepository: Attempting to open Health Connect app...");
