@@ -1,6 +1,9 @@
 # Neuralis
 Elite AI Health Coach powered by Gemini.
 
+## Live App
+[Open Neuralis](https://mayankidk.github.io/ai_health_coach/)
+
 ## 🚀 Overview
 Neuralis is a state-of-the-art health companion that transforms your data into actionable wellness strategies. By leveraging Google's Gemini AI, it analyzes your activity, sleep, and nutrition to generate a personalized **Daily Plan** tailored to your peak performance.
 
