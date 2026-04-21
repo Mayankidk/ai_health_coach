@@ -39,6 +39,14 @@ class GeminiService {
     } catch (e) {
       final errorStr = e.toString().toLowerCase();
       print("GeminiService: Error in _doRetry with $modelName: $e");
+
+      if (errorStr.contains('reported as leaked') ||
+          errorStr.contains('api key is invalid') ||
+          errorStr.contains('invalid api key')) {
+        throw Exception(
+          "Gemini API key is unavailable for client-side use. Please move Gemini calls behind a secure backend.",
+        );
+      }
       
       if (errorStr.contains('quota') || 
           errorStr.contains('429') || 
