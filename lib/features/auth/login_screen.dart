@@ -5,6 +5,7 @@ import 'auth_service.dart';
 import 'onboarding_screen.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../../core/user_repo.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
