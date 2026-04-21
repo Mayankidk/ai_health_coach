@@ -34,9 +34,14 @@ Future<void> setupServices({bool isBackground = false}) async {
     print("Starting setupServices (isBackground: $isBackground)...");
   }
   
-  // Environment Variables
+  // Load .env for local dev (mobile/desktop). On web/CI this file won't exist,
+  // so we silently ignore the error — secrets come from --dart-define-from-file.
   print("Loading .env...");
-  await dotenv.load(fileName: ".env");
+  try {
+    await dotenv.load(fileName: ".env");
+  } catch (_) {
+    print(".env not found, relying on dart-define environment variables.");
+  }
 
   // Hive
   print("Initializing Hive...");
