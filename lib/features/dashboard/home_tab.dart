@@ -25,7 +25,6 @@ class HomeTab extends StatefulWidget {
 
 class _HomeTabState extends State<HomeTab> {
   final HealthRepository _healthRepo = getIt<HealthRepository>();
-  final GeminiService _geminiService = getIt<GeminiService>();
   DateTime _lastSync = DateTime.now();
   List<int> _weeklySteps = [];
   List<double> _weeklyDistance = [];
@@ -482,7 +481,7 @@ class _HomeTabState extends State<HomeTab> {
                                             if (profile == null) return;
                                             setModalState(() => _isAnalyzing = true);
                                             try {
-                                              final insight = await _geminiService.analyzeHealthTrends(
+                                              final insight = await getIt<GeminiService>().analyzeHealthTrends(
                                                 profile: profile,
                                                 weeklySteps: stepHistory,
                                               );
@@ -794,7 +793,7 @@ class _HomeTabState extends State<HomeTab> {
                           setState(() => _isAnalyzingDaily = true);
                           try {
                             final currentTime = TimeFormatter.format12Hour(DateTime.now());
-                            final insight = await _geminiService.generateDailyInsight(
+                            final insight = await getIt<GeminiService>().generateDailyInsight(
                               profile: profile,
                               healthData: healthData,
                               currentTime: currentTime,

@@ -9,7 +9,6 @@ import '../../core/health_log.dart';
 import '../../core/memory_repository.dart';
 
 class ChatService {
-  final GeminiService _gemini = getIt<GeminiService>();
   final PlanService _planService = getIt<PlanService>();
   final HealthRepository _healthRepo = getIt<HealthRepository>();
   final MemoryRepository _memoryRepo = getIt<MemoryRepository>();
@@ -17,6 +16,8 @@ class ChatService {
 
   Future<String> sendMessage(String text, List<Map<String, String>> history) async {
     try {
+      final gemini = getIt<GeminiService>();
+
       // 1. Fetch active memory logs to give context to Gemini
       final activeLogs = _memoryRepo.box
           .values
@@ -30,7 +31,7 @@ class ChatService {
       print("ChatService: Active logs count: ${activeLogs.length}");
 
       // 2. Get the response from Gemini with active memory context
-      final response = await _gemini.chat(text, history, activeLogs: activeLogs);
+      final response = await gemini.chat(text, history, activeLogs: activeLogs);
       
       final preview = response.length > 20 ? "${response.substring(0, 20)}..." : response;
       print("ChatService: Received response: '$preview'");
@@ -71,7 +72,7 @@ class ChatService {
 
       // B. Extract and save new health insights (suggested logs)
       print("ChatService: Extracting insights in background...");
-      final insights = await _gemini.extractInsights(userMessage, aiResponse);
+      final insights = await getIt<GeminiService>().extractInsights(userMessage, aiResponse);
       if (insights.isNotEmpty) {
         for (final insightWithTag in insights) {
           final isAuto = insightWithTag.startsWith('[AUTO]');

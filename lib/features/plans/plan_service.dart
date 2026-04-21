@@ -7,7 +7,6 @@ import '../../core/services.dart';
 import '../chat/gemini_service.dart';
 
 class PlanService {
-  final GeminiService _gemini = getIt<GeminiService>();
   final Box<DailyPlan> _planBox = Hive.box<DailyPlan>('daily_plans');
 
   DailyPlan _buildFallbackPlan({
@@ -68,6 +67,8 @@ class PlanService {
 
     print("PlanService: No cached plan for $todayStr. Triggering AI generation...");
     try {
+      final gemini = getIt<GeminiService>();
+
       // Fetch active memory logs
       final activeLogs = Hive.box<HealthLog>('health_logs')
           .values
@@ -75,7 +76,7 @@ class PlanService {
           .map((log) => log.content)
           .toList();
 
-      final plan = await _gemini.generatePlan(
+      final plan = await gemini.generatePlan(
         profile: profile,
         healthData: healthData,
         activeLogs: activeLogs,

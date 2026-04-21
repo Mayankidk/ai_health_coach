@@ -15,6 +15,8 @@ class GeminiService {
       ? const String.fromEnvironment('GEMINI_API_KEY')
       : dotenv.env['GEMINI_API_KEY'] ?? '';
 
+  bool get isConfigured => _apiKey.isNotEmpty;
+
   GenerativeModel _createModel(String modelName) {
     return GenerativeModel(
       model: modelName,
