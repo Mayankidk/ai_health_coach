@@ -27,6 +27,9 @@ jobs:
       - name: Enable Web
         run: flutter config --enable-web
 
+      - name: Create dummy .env
+        run: touch .env
+
       - name: Install dependencies
         run: flutter pub get
 
