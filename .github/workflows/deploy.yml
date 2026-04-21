@@ -35,11 +35,7 @@ jobs:
 
       - name: Build Web
         run: |
-          flutter build web --base-href "/ai_health_coach/" --release \
-            --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
-            --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}" \
-            --dart-define=GOOGLE_WEB_CLIENT_ID="${{ secrets.GOOGLE_WEB_CLIENT_ID }}" \
-            --dart-define=GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}"
+          flutter build web --base-href "/ai_health_coach/" --release --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}" --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}" --dart-define=GOOGLE_WEB_CLIENT_ID="${{ secrets.GOOGLE_WEB_CLIENT_ID }}" --dart-define=GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}"
           cp build/web/index.html build/web/404.html
 
       - name: Deploy to GitHub Pages
