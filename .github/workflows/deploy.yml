@@ -34,11 +34,15 @@ jobs:
           GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          printf '{\n  "SUPABASE_URL": "%s",\n  "SUPABASE_ANON_KEY": "%s",\n  "GOOGLE_WEB_CLIENT_ID": "%s",\n  "GEMINI_API_KEY": "%s"\n}' \
-            "$SUPABASE_URL" \
-            "$SUPABASE_ANON_KEY" \
-            "$GOOGLE_WEB_CLIENT_ID" \
-            "$GEMINI_API_KEY" > secrets.json
+          python3 -c "
+          import json, os
+          json.dump({
+            'SUPABASE_URL': os.environ['SUPABASE_URL'].strip(),
+            'SUPABASE_ANON_KEY': os.environ['SUPABASE_ANON_KEY'].strip(),
+            'GOOGLE_WEB_CLIENT_ID': os.environ['GOOGLE_WEB_CLIENT_ID'].strip(),
+            'GEMINI_API_KEY': os.environ['GEMINI_API_KEY'].strip(),
+          }, open('secrets.json', 'w'))
+          "
 
       - name: Install dependencies
         run: flutter pub get
