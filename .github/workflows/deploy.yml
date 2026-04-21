@@ -25,21 +25,38 @@ jobs:
           cache: true
 
       - name: Enable Web
+        working-directory: ./ai_health_coach_app
         run: flutter config --enable-web
 
-      - name: Create dummy .env
-        run: touch .env
+      - name: Create secrets.json from GitHub Secrets
+        working-directory: ./ai_health_coach_app
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          printf '{\n  "SUPABASE_URL": "%s",\n  "SUPABASE_ANON_KEY": "%s",\n  "GOOGLE_WEB_CLIENT_ID": "%s",\n  "GEMINI_API_KEY": "%s"\n}' \
+            "$SUPABASE_URL" \
+            "$SUPABASE_ANON_KEY" \
+            "$GOOGLE_WEB_CLIENT_ID" \
+            "$GEMINI_API_KEY" > secrets.json
 
       - name: Install dependencies
+        working-directory: ./ai_health_coach_app
         run: flutter pub get
 
       - name: Build Web
+        working-directory: ./ai_health_coach_app
         run: |
-          flutter build web --base-href "/ai_health_coach/" --release --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}" --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}" --dart-define=GOOGLE_WEB_CLIENT_ID="${{ secrets.GOOGLE_WEB_CLIENT_ID }}" --dart-define=GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}"
+          flutter build web \
+            --base-href "/ai_health_coach/" \
+            --release \
+            --dart-define-from-file=secrets.json
           cp build/web/index.html build/web/404.html
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./build/web
+          publish_dir: ./ai_health_coach_app/build/web
