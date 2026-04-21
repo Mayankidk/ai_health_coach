@@ -1,3 +1,4 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
@@ -5,7 +6,6 @@ import 'auth_service.dart';
 import 'onboarding_screen.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../../core/user_repo.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -55,11 +55,19 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted && _authService.isAuthenticated) {
         await _navigateToAppropriateScreen();
       }
+    } on AuthException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) {
-        final errorMessage = e is AuthException 
-            ? e.message 
-            : (e is TimeoutException ? "Connection timed out. Please try again." : e.toString());
+        final errorMessage = e is TimeoutException ? "Connection timed out. Please try again." : e.toString();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(errorMessage),
