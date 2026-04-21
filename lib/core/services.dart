@@ -80,24 +80,18 @@ Future<void> setupServices({bool isBackground = false}) async {
 
   if (supabaseUrl == null || supabaseUrl.isEmpty || supabaseKey == null || supabaseKey.isEmpty) {
     print("CRITICAL: Supabase credentials missing! No SUPABASE_URL or SUPABASE_ANON_KEY found.");
-    if (kReleaseMode) {
-      // In production, we at least want to know what failed
-      print("Environment check - fromEnvironment(URL): ${const String.fromEnvironment('SUPABASE_URL').isNotEmpty}, dotenv(URL): ${dotenv.env['SUPABASE_URL'] != null}");
-    }
+    throw StateError(
+      "Supabase is not configured for this build. Please verify SUPABASE_URL and SUPABASE_ANON_KEY in your environment or GitHub Pages secrets.",
+    );
   }
 
-  try {
-    await Supabase.initialize(
-      url: supabaseUrl ?? '',
-      anonKey: supabaseKey ?? '',
-    ).timeout(const Duration(seconds: 10), onTimeout: () {
-      print("Supabase initialization timed out!");
-      throw TimeoutException("Supabase initialization took too long.");
-    });
-  } catch (e) {
-    print("Supabase initialization error: $e");
-    // We swallow it here so the rest of the services can at least try to register
-  }
+  await Supabase.initialize(
+    url: supabaseUrl,
+    anonKey: supabaseKey,
+  ).timeout(const Duration(seconds: 10), onTimeout: () {
+    print("Supabase initialization timed out!");
+    throw TimeoutException("Supabase initialization took too long.");
+  });
   
   // Register Services
   print("Registering services...");

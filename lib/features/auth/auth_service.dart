@@ -142,4 +142,6 @@ class AuthService {
   User? get currentUser => _client.auth.currentUser;
   
   String? get userId => _client.auth.currentUser?.id;
+
+  Stream<AuthState> get authStateChanges => _client.auth.onAuthStateChange;
 }

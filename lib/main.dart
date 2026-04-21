@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get_it/get_it.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/services.dart';
 import 'features/auth/login_screen.dart';
 import 'features/auth/auth_service.dart';
@@ -232,45 +233,54 @@ class _AuthWrapperState extends State<AuthWrapper> {
   Widget build(BuildContext context) {
     final authService = GetIt.I<AuthService>();
     final userRepo = GetIt.I<UserRepository>();
-    
-    if (!authService.isAuthenticated) {
-      return const LoginScreen();
-    }
 
-    final currentUserId = authService.userId;
-    
-    // Only use prefetched profile if it belongs to the currently logged in user
-    if (widget.prefetchedProfile != null && widget.prefetchedProfile!.userId == currentUserId) {
-      if (!widget.prefetchedProfile!.onboardingCompleted) {
-        return const OnboardingScreen();
-      }
-      return const DashboardScreen();
-    }
-
-    if (currentUserId == null) return const LoginScreen();
-
-    return FutureBuilder(
-      future: userRepo.ensureProfileSynced(authService.userId!),
-      builder: (context, profileSnapshot) {
-        if (profileSnapshot.connectionState == ConnectionState.waiting) {
-          return Scaffold(
-            backgroundColor: Colors.white,
-            body: Center(
-              child: Image.asset(
-                'assets/images/logo_white.png',
-                width: 150,
-                height: 150,
-              ),
-            ),
-          );
+    return StreamBuilder<AuthState>(
+      stream: authService.authStateChanges,
+      initialData: AuthState(AuthChangeEvent.initialSession, authService.currentUser == null
+          ? null
+          : Supabase.instance.client.auth.currentSession),
+      builder: (context, _) {
+        if (!authService.isAuthenticated) {
+          return const LoginScreen();
         }
-        
-        final profile = profileSnapshot.data;
-        if (profile == null || !profile.onboardingCompleted) {
-          return const OnboardingScreen();
+
+        final currentUserId = authService.userId;
+
+        // Only use prefetched profile if it belongs to the currently logged in user
+        if (widget.prefetchedProfile != null &&
+            widget.prefetchedProfile!.userId == currentUserId) {
+          if (!widget.prefetchedProfile!.onboardingCompleted) {
+            return const OnboardingScreen();
+          }
+          return const DashboardScreen();
         }
-        
-        return const DashboardScreen();
+
+        if (currentUserId == null) return const LoginScreen();
+
+        return FutureBuilder(
+          future: userRepo.ensureProfileSynced(currentUserId),
+          builder: (context, profileSnapshot) {
+            if (profileSnapshot.connectionState == ConnectionState.waiting) {
+              return Scaffold(
+                backgroundColor: Colors.white,
+                body: Center(
+                  child: Image.asset(
+                    'assets/images/logo_white.png',
+                    width: 150,
+                    height: 150,
+                  ),
+                ),
+              );
+            }
+
+            final profile = profileSnapshot.data;
+            if (profile == null || !profile.onboardingCompleted) {
+              return const OnboardingScreen();
+            }
+
+            return const DashboardScreen();
+          },
+        );
       },
     );
   }
