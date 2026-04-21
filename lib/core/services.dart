@@ -22,6 +22,26 @@ final getIt = GetIt.instance;
 
 bool _servicesInitialized = false;
 
+String _maskConfigValue(String? value) {
+  if (value == null || value.isEmpty) return 'missing';
+  if (value.length <= 8) return '${value.substring(0, value.length.clamp(0, 4))}...';
+  return '${value.substring(0, 6)}...${value.substring(value.length - 4)}';
+}
+
+String buildSupabaseConfigDiagnostics() {
+  final envUrl = const String.fromEnvironment('SUPABASE_URL');
+  final envKey = const String.fromEnvironment('SUPABASE_ANON_KEY');
+  final dotEnvUrl = dotenv.env['SUPABASE_URL'];
+  final dotEnvKey = dotenv.env['SUPABASE_ANON_KEY'];
+
+  return [
+    'fromEnvironment URL: ${envUrl.isNotEmpty ? _maskConfigValue(envUrl) : 'missing'}',
+    'fromEnvironment anon key: ${envKey.isNotEmpty ? _maskConfigValue(envKey) : 'missing'}',
+    'dotenv URL: ${_maskConfigValue(dotEnvUrl)}',
+    'dotenv anon key: ${_maskConfigValue(dotEnvKey)}',
+  ].join('\n');
+}
+
 Future<void> setupServices({bool isBackground = false}) async {
   if (_servicesInitialized) {
     if (kDebugMode) {
@@ -81,7 +101,7 @@ Future<void> setupServices({bool isBackground = false}) async {
   if (supabaseUrl == null || supabaseUrl.isEmpty || supabaseKey == null || supabaseKey.isEmpty) {
     print("CRITICAL: Supabase credentials missing! No SUPABASE_URL or SUPABASE_ANON_KEY found.");
     throw StateError(
-      "Supabase is not configured for this build. Please verify SUPABASE_URL and SUPABASE_ANON_KEY in your environment or GitHub Pages secrets.",
+      "Supabase is not configured for this build. Please verify SUPABASE_URL and SUPABASE_ANON_KEY in your environment or GitHub Pages secrets.\n${buildSupabaseConfigDiagnostics()}",
     );
   }
 

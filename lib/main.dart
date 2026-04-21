@@ -198,6 +198,18 @@ class _InitScreenState extends State<InitScreen> {
                       textAlign: TextAlign.center,
                       style: const TextStyle(color: Colors.grey),
                     ),
+                    if (snapshot.error.toString().contains('Supabase')) ...[
+                      const SizedBox(height: 12),
+                      SelectableText(
+                        buildSupabaseConfigDiagnostics(),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 12,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 24),
                     ElevatedButton(
                       onPressed: () => setState(() {
