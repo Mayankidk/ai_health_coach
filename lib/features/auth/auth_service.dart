@@ -21,16 +21,24 @@ class AuthService {
   Future<void> signInWithGoogle() async {
     try {
       if (kIsWeb) {
-        // Supabase's native OAuth flow is often more reliable on Web
+        // Use the current origin for web redirects (e.g. https://user.github.io/repo)
+        final redirectUrl = Uri.base.origin + (Uri.base.path.startsWith('/') ? '' : '/') + Uri.base.path;
+        print("AuthService: Web OAuth initiated with redirectTo: $redirectUrl");
+        
         await _client.auth.signInWithOAuth(
           OAuthProvider.google,
-          redirectTo: 'http://localhost:5000',
+          redirectTo: redirectUrl,
         );
         return;
       }
 
-      final webClientId = dotenv.get('GOOGLE_WEB_CLIENT_ID', fallback: '');
-      final iosClientId = dotenv.get('GOOGLE_IOS_CLIENT_ID', fallback: '');
+      final webClientId = const String.fromEnvironment('GOOGLE_WEB_CLIENT_ID').isNotEmpty
+          ? const String.fromEnvironment('GOOGLE_WEB_CLIENT_ID')
+          : dotenv.get('GOOGLE_WEB_CLIENT_ID', fallback: '');
+          
+      final iosClientId = const String.fromEnvironment('GOOGLE_IOS_CLIENT_ID').isNotEmpty
+          ? const String.fromEnvironment('GOOGLE_IOS_CLIENT_ID')
+          : dotenv.get('GOOGLE_IOS_CLIENT_ID', fallback: '');
 
       final googleSignIn = GoogleSignIn(
         clientId: iosClientId,
@@ -69,7 +77,10 @@ class AuthService {
     try {
       await _client.auth.signInAnonymously();
     } catch (e) {
-      print("Guest sign in error: $e");
+      print("Guest sign in error (Detailed): $e");
+      if (e is AuthException) {
+        print("Auth Error Code: ${e.statusCode}, Message: ${e.message}");
+      }
       rethrow;
     }
   }

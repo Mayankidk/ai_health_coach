@@ -59,15 +59,26 @@ Future<void> setupServices({bool isBackground = false}) async {
     if (!Hive.isBoxOpen('ai_insights')) Hive.openBox('ai_insights'),
   ]);
 
-  // Supabase
-  print("Initializing Supabase...");
-  final supabaseUrl = dotenv.env['SUPABASE_URL'];
-  final supabaseKey = dotenv.env['SUPABASE_ANON_KEY'];
+  // Supabase Configuration
+  // We check for variables in this order:
+  // 1. String.fromEnvironment (for --dart-define flags used in CI/CD)
+  // 2. dotenv (for local .env file)
+  print("Initializing Supabase credentials...");
+  
+  final supabaseUrl = const String.fromEnvironment('SUPABASE_URL').isNotEmpty 
+      ? const String.fromEnvironment('SUPABASE_URL') 
+      : dotenv.env['SUPABASE_URL'];
+      
+  final supabaseKey = const String.fromEnvironment('SUPABASE_ANON_KEY').isNotEmpty 
+      ? const String.fromEnvironment('SUPABASE_ANON_KEY') 
+      : dotenv.env['SUPABASE_ANON_KEY'];
 
   if (supabaseUrl == null || supabaseUrl.isEmpty || supabaseKey == null || supabaseKey.isEmpty) {
-    print("CRITICAL: Supabase credentials missing from .env!");
-    // In release mode, we shouldn't throw here to avoid a hard crash, 
-    // but the app will likely fail later.
+    print("CRITICAL: Supabase credentials missing! No SUPABASE_URL or SUPABASE_ANON_KEY found.");
+    if (kReleaseMode) {
+      // In production, we at least want to know what failed
+      print("Environment check - fromEnvironment(URL): ${const String.fromEnvironment('SUPABASE_URL').isNotEmpty}, dotenv(URL): ${dotenv.env['SUPABASE_URL'] != null}");
+    }
   }
 
   try {

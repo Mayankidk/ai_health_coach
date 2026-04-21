@@ -11,7 +11,9 @@ class GeminiService {
     'gemini-flash-latest',
   ];
 
-  GeminiService() : _apiKey = dotenv.env['GEMINI_API_KEY'] ?? '';
+  GeminiService() : _apiKey = const String.fromEnvironment('GEMINI_API_KEY').isNotEmpty
+      ? const String.fromEnvironment('GEMINI_API_KEY')
+      : dotenv.env['GEMINI_API_KEY'] ?? '';
 
   GenerativeModel _createModel(String modelName) {
     return GenerativeModel(

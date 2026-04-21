@@ -56,8 +56,15 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       if (mounted) {
+        final errorMessage = e is AuthException 
+            ? e.message 
+            : (e is TimeoutException ? "Connection timed out. Please try again." : e.toString());
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e is TimeoutException ? e.message! : e.toString())),
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     } finally {
