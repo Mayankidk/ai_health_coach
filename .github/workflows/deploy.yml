@@ -32,6 +32,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
+          WEB_AUTH_REDIRECT_URL: https://${{ github.repository_owner }}.github.io/ai_health_coach/
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           python3 -c "
@@ -40,6 +41,7 @@ jobs:
             'SUPABASE_URL': os.environ['SUPABASE_URL'].strip(),
             'SUPABASE_ANON_KEY': os.environ['SUPABASE_ANON_KEY'].strip(),
             'GOOGLE_WEB_CLIENT_ID': os.environ['GOOGLE_WEB_CLIENT_ID'].strip(),
+            'WEB_AUTH_REDIRECT_URL': os.environ['WEB_AUTH_REDIRECT_URL'].strip(),
             'GEMINI_API_KEY': os.environ['GEMINI_API_KEY'].strip(),
           }, open('secrets.json', 'w'))
           "

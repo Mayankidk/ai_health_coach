@@ -5,6 +5,34 @@ import 'package:flutter/foundation.dart';
 
 class AuthService {
   final SupabaseClient _client = Supabase.instance.client;
+
+  String _resolveWebRedirectUrl() {
+    final configuredRedirectUrl =
+        const String.fromEnvironment('WEB_AUTH_REDIRECT_URL').isNotEmpty
+            ? const String.fromEnvironment('WEB_AUTH_REDIRECT_URL')
+            : dotenv.get('WEB_AUTH_REDIRECT_URL', fallback: '');
+
+    if (configuredRedirectUrl.isNotEmpty) {
+      return configuredRedirectUrl;
+    }
+
+    var path = Uri.base.path;
+    if (path.endsWith('/index.html')) {
+      path = path.substring(0, path.length - 'index.html'.length);
+    }
+    if (path.isEmpty) {
+      path = '/';
+    } else if (!path.endsWith('/')) {
+      path = '$path/';
+    }
+
+    return Uri(
+      scheme: Uri.base.scheme,
+      host: Uri.base.host,
+      port: Uri.base.hasPort ? Uri.base.port : null,
+      path: path,
+    ).toString();
+  }
   
   Future<void> signIn(String email, String password) async {
     try {
@@ -21,8 +49,8 @@ class AuthService {
   Future<void> signInWithGoogle() async {
     try {
       if (kIsWeb) {
-        // Use the current origin for web redirects (e.g. https://user.github.io/repo)
-        final redirectUrl = Uri.base.origin + (Uri.base.path.startsWith('/') ? '' : '/') + Uri.base.path;
+        // GitHub Pages and Supabase both expect an exact redirect URL match.
+        final redirectUrl = _resolveWebRedirectUrl();
         print("AuthService: Web OAuth initiated with redirectTo: $redirectUrl");
         
         await _client.auth.signInWithOAuth(
