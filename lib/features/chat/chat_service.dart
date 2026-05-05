@@ -17,6 +17,7 @@ class ChatService {
   Future<String> sendMessage(String text, List<Map<String, String>> history) async {
     try {
       final gemini = getIt<GeminiService>();
+      await _memoryRepo.ensureReady();
 
       // 1. Fetch active memory logs to give context to Gemini
       final activeLogs = _memoryRepo.box
@@ -54,6 +55,7 @@ class ChatService {
       final userId = _auth.userId;
       if (userId == null) return;
 
+      await ensureUserProfileBox();
       final profile = Hive.box<UserProfile>('user_profile').get(userId);
       final healthData = _healthRepo.getDailyData(DateTime.now());
 

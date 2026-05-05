@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:health/health.dart';
 import 'package:hive/hive.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -21,6 +22,9 @@ enum HealthConnectionStatus {
 }
 
 class HealthRepository {
+  static const MethodChannel _healthConnectChannel =
+      MethodChannel('neuralis/health_connect');
+
   // Only instantiate Health if NOT on web to avoid Platform errors
   final Health? _health = kIsWeb ? null : Health();
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -30,6 +34,8 @@ class HealthRepository {
   Stream<HealthData> get healthStream => _controller.stream;
 
   Box<HealthData>? _box;
+  Future<void>? _initFuture;
+  bool _initialized = false;
 
   HealthData _currentData = HealthData(
     steps: 5000,
@@ -142,27 +148,44 @@ class HealthRepository {
   }
 
   Future<void> init() async {
-    _box = Hive.box<HealthData>('health_data');
-    
-    // Load last saved today's data if it exists
-    final todayStr = DateTime.now().toIso8601String().split('T')[0];
-    final savedData = _box?.get(todayStr);
-    if (savedData != null) {
-      _currentData = savedData;
-    }
+    if (_initialized) return;
+    if (_initFuture != null) return _initFuture!;
 
-    if (kIsWeb) {
-      _controller.add(_currentData);
-      return;
-    }
+    _initFuture = _performInit();
+    await _initFuture;
+  }
+
+  Future<void> _performInit() async {
     try {
-      await _health?.configure();
-    } catch (e) {
-      print("Health init error: $e");
+      await ensureHealthDataBox();
+      _box = Hive.box<HealthData>('health_data');
+      
+      // Load last saved today's data if it exists
+      final todayStr = DateTime.now().toIso8601String().split('T')[0];
+      final savedData = _box?.get(todayStr);
+      if (savedData != null) {
+        _currentData = savedData;
+      }
+
+      if (kIsWeb) {
+        _controller.add(_currentData);
+        _initialized = true;
+        return;
+      }
+      try {
+        await _health?.configure();
+      } catch (e) {
+        print("Health init error: $e");
+      }
+
+      _initialized = true;
+    } finally {
+      _initFuture = null;
     }
   }
 
   Future<void> syncFromWearables({bool forceAll = false}) async {
+    await init();
     if (kIsWeb) {
       // Keep web simulation for now
       final random = Random();
@@ -241,6 +264,7 @@ class HealthRepository {
   }
 
   Future<void> updateManualSleep(int minutes) async {
+    await init();
     final todayStr = DateTime.now().toIso8601String().split('T')[0];
     
     _currentData = HealthData(
@@ -257,6 +281,7 @@ class HealthRepository {
   }
 
   Future<void> updateManualHRV(double hrv) async {
+    await init();
     final todayStr = DateTime.now().toIso8601String().split('T')[0];
     
     _currentData = HealthData(
@@ -294,10 +319,14 @@ class HealthRepository {
   }
 
   HealthData getDailyData(DateTime date) {
+    if (_box == null) {
+      return _currentData;
+    }
     return _currentData;
   }
 
   Future<List<int>> getWeeklySteps() async {
+    await init();
     final List<int> steps = [];
     final today = DateTime.now();
     
@@ -331,11 +360,13 @@ class HealthRepository {
   }
 
   Future<List<double>> getWeeklyDistance() async {
+    await init();
     final steps = await getWeeklySteps();
     return steps.map((s) => s / 1312.0).toList();
   }
 
   Future<List<double>> getWeeklyCalories() async {
+    await init();
     final List<double> calories = [];
     final today = DateTime.now();
     for (int j = 6; j >= 0; j--) {
@@ -368,6 +399,7 @@ class HealthRepository {
   }
   
   Future<List<int>> getWeeklySleep() async {
+    await init();
     final List<int> sleep = [];
     final today = DateTime.now();
     
@@ -390,6 +422,7 @@ class HealthRepository {
   }
 
   Future<List<double>> getWeeklyHRV() async {
+    await init();
     final List<double> hrv = [];
     final today = DateTime.now();
     
@@ -417,18 +450,40 @@ class HealthRepository {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
 
     try {
-      // Try opening the Health Connect app directly via its package launch intent
-      final launched = await launchUrl(
-        Uri.parse('https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata'),
-        mode: LaunchMode.externalApplication,
-      );
+      final opened =
+          await _healthConnectChannel.invokeMethod<bool>('openHealthConnect') ??
+              false;
 
-      if (!launched) {
+      if (!opened) {
         await _openHealthConnectInStore();
       }
     } catch (e) {
       print("HealthRepository: Error opening Health Connect: $e");
       await _openHealthConnectInStore();
+    }
+  }
+
+  Future<void> openGoogleFitApp() async {
+    print("HealthRepository: Attempting to open Google Fit...");
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+
+    try {
+      final opened =
+          await _healthConnectChannel.invokeMethod<bool>('openGoogleFit') ??
+              false;
+
+      if (!opened) {
+        await launchUrl(
+          Uri.parse('https://play.google.com/store/apps/details?id=com.google.android.apps.fitness'),
+          mode: LaunchMode.externalApplication,
+        );
+      }
+    } catch (e) {
+      print("HealthRepository: Error opening Google Fit: $e");
+      await launchUrl(
+        Uri.parse('https://play.google.com/store/apps/details?id=com.google.android.apps.fitness'),
+        mode: LaunchMode.externalApplication,
+      );
     }
   }
 
@@ -451,6 +506,7 @@ class HealthRepository {
   }
 
   Future<HealthConnectionStatus> requestPermissions() async {
+    await init();
     print("HealthRepository: Starting permission request...");
     if (kIsWeb) return HealthConnectionStatus.granted;
     
@@ -530,6 +586,7 @@ class HealthRepository {
   }
 
   Future<bool> hasPermissions({List<HealthDataType>? customTypes}) async {
+    await init();
     if (kIsWeb) return true;
     var types = customTypes ?? [
       HealthDataType.STEPS,
@@ -544,7 +601,27 @@ class HealthRepository {
     }
   }
 
+  Future<bool> isHealthConnectAvailable() async {
+    await init();
+    if (kIsWeb) return true;
+    if (defaultTargetPlatform != TargetPlatform.android) return true;
+
+    try {
+      final status = await _health?.getHealthConnectSdkStatus();
+      final statusStr = status.toString();
+      print("HealthRepository: Health Connect availability is: $statusStr");
+      return statusStr.contains('Installed') ||
+          statusStr.contains('INSTALLED') ||
+          statusStr.contains('Available') ||
+          statusStr.contains('AVAILABLE');
+    } catch (e) {
+      print("HealthRepository: Availability check failed: $e");
+      return false;
+    }
+  }
+
   Future<int> getDailySteps() async {
+    await init();
     if (kIsWeb) return _currentData.steps;
 
     final now = DateTime.now();
@@ -560,6 +637,7 @@ class HealthRepository {
   }
 
   Future<List<HealthDataPoint>> getHeartRateData() async {
+    await init();
     if (kIsWeb) return [];
 
     final now = DateTime.now();
@@ -579,6 +657,7 @@ class HealthRepository {
   }
 
   Future<List<HealthDataPoint>> getSleepData() async {
+    await init();
     if (kIsWeb) return [];
 
     final now = DateTime.now();

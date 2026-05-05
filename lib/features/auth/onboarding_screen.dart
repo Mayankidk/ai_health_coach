@@ -117,7 +117,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           );
                         } else {
                           // Fallback if they somehow hit next on the syncing page
-                          _completeOnboarding();
+                          await _completeOnboarding();
                         }
                       },
                     child: Text(_currentPage == 6 ? "Sync Health Data" : (_currentPage == _totalPages - 1 ? "Finishing..." : "Next")),
@@ -181,12 +181,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     
     // Always complete the onboarding flow so the user isn't stuck
     if (mounted) {
-       _completeOnboarding();
+      await _completeOnboarding();
     }
   }
   
-  void _completeOnboarding() {
-    _saveProfile();
+  Future<void> _completeOnboarding() async {
+    await _saveProfile();
+    if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => const DashboardScreen()),
     );

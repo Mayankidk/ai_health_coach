@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../chat/voice_log_dialog.dart';
 import '../../core/services.dart';
@@ -43,13 +44,14 @@ class _HomeTabState extends State<HomeTab> {
   void initState() {
     super.initState();
     _loadWeeklyData();
-    _loadDailyInsight();
+    unawaited(_loadDailyInsight());
     // Trigger automatic sync on startup (silent)
-    _handleRefresh(silent: true);
+    unawaited(_handleRefresh(silent: true));
   }
 
-  void _loadDailyInsight() {
-    final box = Hive.box('ai_insights');
+  Future<void> _loadDailyInsight() async {
+    final box = await ensureAiInsightsBox();
+    if (!mounted) return;
     setState(() {
       _dailyInsight = box.get('daily_insight') as String?;
       _dailyInsightTimestamp = box.get('daily_insight_timestamp') as String?;
@@ -310,7 +312,7 @@ class _HomeTabState extends State<HomeTab> {
     int tempGoal = profile?.dailyStepGoal ?? 10000;
     
     // Load last insight from Hive
-    final insightBox = Hive.box('ai_insights');
+    final insightBox = await ensureAiInsightsBox();
     final lastInsight = insightBox.get('latest_insight') as String?;
     final lastTimestamp = insightBox.get('latest_timestamp') as String?;
     
@@ -800,8 +802,9 @@ class _HomeTabState extends State<HomeTab> {
                             );
                             final timestamp = "Generated on ${TimeFormatter.formatFullDateTime(DateTime.now())}";
                             
-                            await Hive.box('ai_insights').put('daily_insight', insight);
-                            await Hive.box('ai_insights').put('daily_insight_timestamp', timestamp);
+                            final insightBox = await ensureAiInsightsBox();
+                            await insightBox.put('daily_insight', insight);
+                            await insightBox.put('daily_insight_timestamp', timestamp);
                             
                             setState(() {
                               _dailyInsight = insight;

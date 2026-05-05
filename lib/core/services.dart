@@ -15,12 +15,69 @@ import 'user_profile.dart';
 import 'health_data.dart';
 import '../features/notifications/nudge_service.dart';
 import '../features/chat/gemini_service.dart';
+import 'env_config.dart';
 import 'health_log.dart';
 import 'memory_repository.dart';
 
 final getIt = GetIt.instance;
 
 bool _servicesInitialized = false;
+bool _hiveInitialized = false;
+
+Future<void> _ensureHiveReady() async {
+  if (_hiveInitialized) return;
+
+  print("Initializing Hive...");
+  await Hive.initFlutter();
+
+  if (!Hive.isAdapterRegistered(0)) Hive.registerAdapter(DailyPlanAdapter());
+  if (!Hive.isAdapterRegistered(1)) Hive.registerAdapter(PlanItemAdapter());
+  if (!Hive.isAdapterRegistered(2)) Hive.registerAdapter(UserProfileAdapter());
+  if (!Hive.isAdapterRegistered(3)) Hive.registerAdapter(HealthDataAdapter());
+  if (!Hive.isAdapterRegistered(4)) Hive.registerAdapter(HealthLogAdapter());
+
+  _hiveInitialized = true;
+}
+
+Future<Box<UserProfile>> ensureUserProfileBox() async {
+  await _ensureHiveReady();
+  if (!Hive.isBoxOpen('user_profile')) {
+    await Hive.openBox<UserProfile>('user_profile');
+  }
+  return Hive.box<UserProfile>('user_profile');
+}
+
+Future<Box<HealthData>> ensureHealthDataBox() async {
+  await _ensureHiveReady();
+  if (!Hive.isBoxOpen('health_data')) {
+    await Hive.openBox<HealthData>('health_data');
+  }
+  return Hive.box<HealthData>('health_data');
+}
+
+Future<Box<HealthLog>> ensureHealthLogsBox() async {
+  await _ensureHiveReady();
+  if (!Hive.isBoxOpen('health_logs')) {
+    await Hive.openBox<HealthLog>('health_logs');
+  }
+  return Hive.box<HealthLog>('health_logs');
+}
+
+Future<Box<DailyPlan>> ensureDailyPlansBox() async {
+  await _ensureHiveReady();
+  if (!Hive.isBoxOpen('daily_plans')) {
+    await Hive.openBox<DailyPlan>('daily_plans');
+  }
+  return Hive.box<DailyPlan>('daily_plans');
+}
+
+Future<Box> ensureAiInsightsBox() async {
+  await _ensureHiveReady();
+  if (!Hive.isBoxOpen('ai_insights')) {
+    await Hive.openBox('ai_insights');
+  }
+  return Hive.box('ai_insights');
+}
 
 Future<void> setupServices({bool isBackground = false}) async {
   if (_servicesInitialized) {
@@ -34,8 +91,8 @@ Future<void> setupServices({bool isBackground = false}) async {
     print("Starting setupServices (isBackground: $isBackground)...");
   }
   
-  // Load .env for local dev (mobile/desktop). On web/CI this file won't exist,
-  // so we silently ignore the error — secrets come from --dart-define-from-file.
+  // Load .env for local dev. On Android release/CI this file usually is not
+  // bundled, so missing dotenv should fall back to dart-define values.
   print("Loading .env...");
   try {
     await dotenv.load(fileName: ".env");
@@ -43,45 +100,23 @@ Future<void> setupServices({bool isBackground = false}) async {
     print(".env not found, relying on dart-define environment variables.");
   }
 
-  // Hive
-  print("Initializing Hive...");
-  await Hive.initFlutter();
-  
-  // Register Hive Adapters - only if not already registered
-  if (!Hive.isAdapterRegistered(0)) Hive.registerAdapter(DailyPlanAdapter());
-  if (!Hive.isAdapterRegistered(1)) Hive.registerAdapter(PlanItemAdapter());
-  if (!Hive.isAdapterRegistered(2)) Hive.registerAdapter(UserProfileAdapter());
-  if (!Hive.isAdapterRegistered(3)) Hive.registerAdapter(HealthDataAdapter());
-  if (!Hive.isAdapterRegistered(4)) Hive.registerAdapter(HealthLogAdapter());
-  
-  // Open Boxes in parallel
-  print("Opening Hive boxes...");
-  await Future.wait([
-    if (!Hive.isBoxOpen('daily_plans')) Hive.openBox<DailyPlan>('daily_plans'),
-    if (!Hive.isBoxOpen('user_profile')) Hive.openBox<UserProfile>('user_profile'),
-    if (!Hive.isBoxOpen('health_data')) Hive.openBox<HealthData>('health_data'),
-    if (!Hive.isBoxOpen('health_logs')) Hive.openBox<HealthLog>('health_logs'),
-    if (!Hive.isBoxOpen('ai_insights')) Hive.openBox('ai_insights'),
-  ]);
+  await _ensureHiveReady();
+
+  print("Opening core Hive boxes...");
+  await ensureUserProfileBox();
 
   // Supabase Configuration
   // We check for variables in this order:
   // 1. String.fromEnvironment (for --dart-define flags used in CI/CD)
   // 2. dotenv (for local .env file)
   print("Initializing Supabase credentials...");
-  
-  final supabaseUrl = const String.fromEnvironment('SUPABASE_URL').isNotEmpty 
-      ? const String.fromEnvironment('SUPABASE_URL') 
-      : dotenv.env['SUPABASE_URL'];
-      
-  final supabaseKey = const String.fromEnvironment('SUPABASE_ANON_KEY').isNotEmpty 
-      ? const String.fromEnvironment('SUPABASE_ANON_KEY') 
-      : dotenv.env['SUPABASE_ANON_KEY'];
+  final supabaseUrl = EnvConfig.getSupabaseUrl();
+  final supabaseKey = EnvConfig.getSupabaseAnonKey();
 
-  if (supabaseUrl == null || supabaseUrl.isEmpty || supabaseKey == null || supabaseKey.isEmpty) {
+  if (supabaseUrl.isEmpty || supabaseKey.isEmpty) {
     print("CRITICAL: Supabase credentials missing! No SUPABASE_URL or SUPABASE_ANON_KEY found.");
     throw StateError(
-      "Supabase is not configured for this build. Please verify SUPABASE_URL and SUPABASE_ANON_KEY in your environment or GitHub Pages secrets.",
+      "Supabase is not configured for this build. Please pass SUPABASE_URL and SUPABASE_ANON_KEY with --dart-define, or bundle a local .env asset for development.",
     );
   }
 
@@ -107,19 +142,6 @@ Future<void> setupServices({bool isBackground = false}) async {
     getIt.registerLazySingleton<NudgeService>(() => NudgeService());
   }
   
-  // Initialize Health Repository (can also be done on demand)
-  print("Initializing HealthRepository...");
-  await getIt<HealthRepository>().init();
-  
-  print("Initializing NotificationService...");
-  await getIt<NotificationService>().init(requestPermissions: !isBackground);
-  
   _servicesInitialized = true;
   print("setupServices complete!");
-
-  // Schedule daily nudges only when the app is opened, 
-  // not continuously in the background to avoid OS alarm contention and battery drain.
-  if (!isBackground) {
-    Future.microtask(() => getIt<NudgeService>().scheduleDailyNudges());
-  }
 }

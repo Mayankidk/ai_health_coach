@@ -7,13 +7,17 @@ import '../features/auth/auth_service.dart';
 import 'services.dart';
 
 class MemoryRepository {
-  final Box<HealthLog> _box = Hive.box<HealthLog>('health_logs');
   final SupabaseClient _supabase = Supabase.instance.client;
   final AuthService _auth = getIt<AuthService>();
 
-  Box<HealthLog> get box => _box;
+  Box<HealthLog> get box => Hive.box<HealthLog>('health_logs');
+
+  Future<void> ensureReady() async {
+    await ensureHealthLogsBox();
+  }
 
   Future<void> saveMemory(HealthLog memory) async {
+    await ensureReady();
     // 1. Assign ID if missing (for backwards compatibility)
     bool needsIdSave = false;
     if (memory.id == null || memory.id!.isEmpty) {
@@ -23,7 +27,7 @@ class MemoryRepository {
 
     // 2. Save locally to Hive
     if (!memory.isInBox) {
-      await _box.add(memory);
+      await box.add(memory);
     } else if (needsIdSave) {
       await memory.save();
     }
@@ -49,6 +53,7 @@ class MemoryRepository {
   }
 
   Future<void> deleteMemory(HealthLog memory) async {
+    await ensureReady();
     final memoryId = memory.id;
     
     // 1. Delete locally from Hive
@@ -77,7 +82,8 @@ class MemoryRepository {
     final userId = _auth.userId;
     if (userId == null) return;
     
-    final memories = _box.values.where((m) => m != null).cast<HealthLog>().toList();
+    await ensureReady();
+    final memories = box.values.where((m) => m != null).cast<HealthLog>().toList();
     if (memories.isEmpty) return;
 
     bool localUpdatesMade = false;
@@ -115,6 +121,7 @@ class MemoryRepository {
   /// Fetches memories from Supabase and merges them into the local Hive box.
   /// Memories that already exist locally (by ID) are updated; new ones are added.
   Future<void> fetchFromSupabase() async {
+    await ensureReady();
     final userId = _auth.userId;
     if (userId == null) return;
 
@@ -132,7 +139,8 @@ class MemoryRepository {
 
       // Build a map of existing local memories by their ID for fast lookups
       final localById = <String, HealthLog>{};
-      for (final m in _box.values) {
+      await ensureReady();
+      for (final m in box.values) {
         if (m.id != null && m.id!.isNotEmpty) {
           localById[m.id!] = m;
         }
@@ -160,7 +168,7 @@ class MemoryRepository {
             createdAt: createdAt,
           );
           newMemory.id = id;
-          await _box.add(newMemory);
+          await box.add(newMemory);
           await newMemory.save();
         }
       }

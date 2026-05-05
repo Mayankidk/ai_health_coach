@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:get_it/get_it.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/services.dart';
@@ -10,43 +9,9 @@ import 'features/dashboard/dashboard_screen.dart';
 import 'features/notifications/notification_service.dart';
 import 'core/user_repo.dart';
 import 'core/user_profile.dart';
-import 'core/health_repository.dart';
-import 'package:workmanager/workmanager.dart';
-
-@pragma('vm:entry-point')
-void callbackDispatcher() {
-  Workmanager().executeTask((task, inputData) async {
-    try {
-      // Initialize services for background environment
-      await setupServices(isBackground: true);
-      
-      // ONLY sync health data. Do NOT schedule nudges (which touch alarms).
-      final healthRepo = GetIt.I<HealthRepository>();
-      await healthRepo.syncFromWearables();
-      
-      print("Background Task: Lightweight Health sync successful");
-      return Future.value(true);
-    } catch (e) {
-      print("Background Task Error: $e");
-      return Future.value(false);
-    }
-  });
-}
-
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  if (!kIsWeb) {
-    try {
-      Workmanager().initialize(
-        callbackDispatcher,
-        isInDebugMode: false,
-      );
-    } catch (e) {
-      print("Workmanager init failed (expected before full rebuild): $e");
-    }
-  }
 
   runApp(const MyApp());
 }
@@ -132,25 +97,6 @@ class _InitScreenState extends State<InitScreen> {
 
   Future<dynamic> _initializeApp() async {
     await setupServices(isBackground: false);
-    
-    // Register a very lightweight background task
-    if (!kIsWeb) {
-      try {
-        await Workmanager().registerPeriodicTask(
-          "lightweight-health-sync",
-          "syncHealthData",
-          frequency: const Duration(hours: 4), // 4 hours prevents aggressive polling
-          existingWorkPolicy: ExistingPeriodicWorkPolicy.update,
-          constraints: Constraints(
-            networkType: NetworkType.connected,
-            requiresBatteryNotLow: true, // Crucial to prevent phone crashing
-            requiresDeviceIdle: false,
-          ),
-        );
-      } catch (e) {
-        print("Workmanager registration failed: $e");
-      }
-    }
 
     // Pre-fetch profile if authenticated to make transition seamless
     final authService = GetIt.I<AuthService>();

@@ -7,8 +7,9 @@ import 'services.dart';
 import '../features/notifications/nudge_service.dart';
 
 class UserRepository {
-  final Box<UserProfile> _profileBox = Hive.box<UserProfile>('user_profile');
   final SupabaseClient _supabase = Supabase.instance.client;
+
+  Box<UserProfile> get _profileBox => Hive.box<UserProfile>('user_profile');
 
   UserProfile? getProfile(String userId) {
     return _profileBox.get(userId);
@@ -17,6 +18,10 @@ class UserRepository {
   Future<void> saveProfile(UserProfile profile) async {
     // Save locally
     await _profileBox.put(profile.userId, profile);
+
+    if (profile.onboardingCompleted) {
+      _scheduleNudges();
+    }
 
     // Sync to Supabase
     try {
@@ -78,14 +83,13 @@ class UserRepository {
       print("UserRepository: Local profile found. Optimistic boot triggered.");
       // Trigger non-blocking background sync
       unawaited(saveProfile(localProfile));
-      _scheduleNudges();
       return localProfile;
     }
 
     // 2. If local missing, we MUST wait for Supabase (First time login)
     print("UserRepository: No local profile. Fetching from remote...");
     final remoteProfile = await fetchRemoteProfile(userId);
-    if (remoteProfile != null) {
+    if (remoteProfile?.onboardingCompleted == true) {
       _scheduleNudges();
     }
     return remoteProfile;

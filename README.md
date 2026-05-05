@@ -39,6 +39,18 @@ Neuralis is a state-of-the-art health companion that transforms your data into a
    flutter run
    ```
 
+## AI Edge Function
+Gemini calls are proxied through the Supabase `ai-coach` Edge Function so the
+Flutter clients never ship `GEMINI_API_KEY`.
+
+```bash
+supabase secrets set GEMINI_API_KEY=your_gemini_api_key
+supabase functions deploy ai-coach
+```
+
+For local Edge Function development, copy `supabase/functions/.env.example` to
+`supabase/functions/.env`.
+
 ## 🎓 Project Context
 This software was developed as a comprehensive solution for personal wellness, focusing on the intersection of **Artificial Intelligence** and **Personal Health Management**.
 

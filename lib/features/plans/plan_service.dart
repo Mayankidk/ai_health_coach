@@ -7,7 +7,7 @@ import '../../core/services.dart';
 import '../chat/gemini_service.dart';
 
 class PlanService {
-  final Box<DailyPlan> _planBox = Hive.box<DailyPlan>('daily_plans');
+  Box<DailyPlan> get _planBox => Hive.box<DailyPlan>('daily_plans');
 
   DailyPlan _buildFallbackPlan({
     required UserProfile profile,
@@ -54,6 +54,8 @@ class PlanService {
     bool forceRefresh = false,
     String? additionalContext,
   }) async {
+    await ensureDailyPlansBox();
+    await ensureHealthLogsBox();
     final todayStr = DateTime.now().toIso8601String().split('T')[0];
 
     // Check Cache first if not forcing refresh

@@ -1,16 +1,13 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart';
+import '../../core/env_config.dart';
 
 class AuthService {
   final SupabaseClient _client = Supabase.instance.client;
 
   String _resolveWebRedirectUrl() {
-    final configuredRedirectUrl =
-        const String.fromEnvironment('WEB_AUTH_REDIRECT_URL').isNotEmpty
-            ? const String.fromEnvironment('WEB_AUTH_REDIRECT_URL')
-            : dotenv.get('WEB_AUTH_REDIRECT_URL', fallback: '');
+    final configuredRedirectUrl = EnvConfig.getWebAuthRedirectUrl();
 
     if (configuredRedirectUrl.isNotEmpty) {
       return configuredRedirectUrl;
@@ -60,13 +57,8 @@ class AuthService {
         return;
       }
 
-      final webClientId = const String.fromEnvironment('GOOGLE_WEB_CLIENT_ID').isNotEmpty
-          ? const String.fromEnvironment('GOOGLE_WEB_CLIENT_ID')
-          : dotenv.get('GOOGLE_WEB_CLIENT_ID', fallback: '');
-          
-      final iosClientId = const String.fromEnvironment('GOOGLE_IOS_CLIENT_ID').isNotEmpty
-          ? const String.fromEnvironment('GOOGLE_IOS_CLIENT_ID')
-          : dotenv.get('GOOGLE_IOS_CLIENT_ID', fallback: '');
+      final webClientId = EnvConfig.getGoogleWebClientId();
+      final iosClientId = EnvConfig.getGoogleIosClientId();
 
       final googleSignIn = GoogleSignIn(
         clientId: iosClientId,

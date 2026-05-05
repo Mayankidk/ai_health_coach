@@ -8,6 +8,8 @@ import '../auth/auth_service.dart';
 import '../chat/gemini_service.dart';
 
 class NudgeService {
+  static const List<int> _dailyNudgeIds = [100, 101, 102, 103];
+
   final NotificationService _notifications = getIt<NotificationService>();
   final HealthRepository _healthRepo = getIt<HealthRepository>();
   final AuthService _auth = getIt<AuthService>();
@@ -20,8 +22,13 @@ class NudgeService {
 
     final profile = _userRepo.getProfile(userId);
     if (profile == null) return;
+    if (!profile.onboardingCompleted) return;
 
     final healthData = _healthRepo.getDailyData(DateTime.now());
+
+    for (final id in _dailyNudgeIds) {
+      await _notifications.cancelNotification(id);
+    }
 
     // 1. Morning Nudge (9:00 AM)
     await _notifications.scheduleDailyNotification(
@@ -35,7 +42,9 @@ class NudgeService {
     // 2. Noon Check-in (1:00 PM)
     String noonMessage;
     try {
-      noonMessage = await _gemini.getSmartNudge(profile, healthData);
+      noonMessage = await _gemini
+          .getSmartNudge(profile, healthData)
+          .timeout(const Duration(seconds: 8));
     } catch (e) {
       noonMessage = "Mid-day check! Take a short walk to keep the momentum going.";
     }
@@ -51,7 +60,9 @@ class NudgeService {
     // 3. Evening Push (6:00 PM)
     String eveningMessage;
     try {
-      eveningMessage = await _gemini.getSmartNudge(profile, healthData);
+      eveningMessage = await _gemini
+          .getSmartNudge(profile, healthData)
+          .timeout(const Duration(seconds: 8));
     } catch (e) {
       eveningMessage = "Evening push! Complete your step goal now.";
     }

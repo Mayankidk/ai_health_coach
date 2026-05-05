@@ -74,6 +74,7 @@ class _DailyPlanScreenState extends State<DailyPlanScreen> {
       if (userId == null) throw Exception("User not authenticated.");
 
       // Fetch UserProfile from Hive
+      await ensureUserProfileBox();
       final profileBox = Hive.box<UserProfile>('user_profile');
       final profile = profileBox.get(userId);
 
@@ -128,6 +129,7 @@ class _DailyPlanScreenState extends State<DailyPlanScreen> {
           if (userId == null) return;
 
           // Show a simple loading state or just proceed silently
+          await ensureUserProfileBox();
           final profileBox = Hive.box<UserProfile>('user_profile');
           final profile = profileBox.get(userId);
           final healthData = _healthRepo.getDailyData(DateTime.now());
@@ -408,6 +410,7 @@ class _DailyPlanScreenState extends State<DailyPlanScreen> {
     });
 
     // Persist to Hive
+    await ensureDailyPlansBox();
     final planBox = Hive.box<DailyPlan>('daily_plans');
     await planBox.put(updatedPlan.date, updatedPlan);
     

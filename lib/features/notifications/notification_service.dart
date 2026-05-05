@@ -9,12 +9,23 @@ import 'dart:io';
 class NotificationService {
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
-  
+  bool _initialized = false;
+
   // For Web/In-App notifications
   static final GlobalKey<ScaffoldMessengerState> messengerKey = GlobalKey<ScaffoldMessengerState>();
 
   Future<void> init({bool requestPermissions = true}) async {
-    if (kIsWeb) return;
+    if (kIsWeb) {
+      _initialized = true;
+      return;
+    }
+
+    if (_initialized) {
+      if (Platform.isAndroid && requestPermissions) {
+        await _requestAndroidPermissions();
+      }
+      return;
+    }
     
     // Initialize Timezone
     tz.initializeTimeZones();
@@ -44,20 +55,43 @@ class NotificationService {
       },
     );
 
+    _initialized = true;
+
     // Request permissions for Android 13+ only if requested and not in background
     if (Platform.isAndroid && requestPermissions) {
-      try {
-        final androidImpl = _localNotifications
-            .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-            
-        await androidImpl?.requestNotificationsPermission();
-        await androidImpl?.requestExactAlarmsPermission();
-      } catch (e) {
-        if (kDebugMode) {
-          print("NotificationService: Error requesting permission: $e");
-        }
+      await _requestAndroidPermissions();
+    }
+  }
+
+  Future<void> _requestAndroidPermissions() async {
+    try {
+      final androidImpl = _localNotifications
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+
+      final grantedNotifications =
+          await androidImpl?.requestNotificationsPermission();
+      final grantedExactAlarms =
+          await androidImpl?.requestExactAlarmsPermission();
+
+      if (kDebugMode) {
+        print(
+          "NotificationService: notificationPermission=$grantedNotifications, exactAlarmPermission=$grantedExactAlarms",
+        );
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print("NotificationService: Error requesting permission: $e");
       }
     }
+  }
+
+  Future<bool> notificationsAllowed() async {
+    if (kIsWeb || !Platform.isAndroid) return true;
+
+    final androidImpl = _localNotifications
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+
+    return await androidImpl?.areNotificationsEnabled() ?? true;
   }
 
   Future<void> scheduleDailyNotification({
@@ -69,16 +103,27 @@ class NotificationService {
   }) async {
     if (kIsWeb) return;
 
+    if (!_initialized) {
+      await init(requestPermissions: false);
+    }
+
+    final notificationsEnabled = await notificationsAllowed();
+    if (!notificationsEnabled) {
+      throw StateError('Notification permission has not been granted.');
+    }
+
     if (kDebugMode) {
       print("NotificationService: Scheduling daily notification '$title' at $hour:$minute");
     }
+
+    final scheduledTime = _nextInstanceOfTime(hour, minute);
 
     try {
       await _localNotifications.zonedSchedule(
         id,
         title,
         body,
-        _nextInstanceOfTime(hour, minute),
+        scheduledTime,
         const NotificationDetails(
           android: AndroidNotificationDetails(
             'daily_nudges',
@@ -95,14 +140,15 @@ class NotificationService {
       if (kDebugMode) {
         print("NotificationService: Failed to schedule daily notification: $e");
       }
-      
+
       // Fallback to non-exact if exact fails
-      if (e.toString().contains('exact_alarms_not_permitted')) {
+      if (e.toString().contains('exact_alarms_not_permitted') ||
+          e.toString().contains('Exact alarms are not permitted')) {
         await _localNotifications.zonedSchedule(
           id,
           title,
           body,
-          _nextInstanceOfTime(hour, minute),
+          scheduledTime,
           const NotificationDetails(
             android: AndroidNotificationDetails(
               'daily_nudges',
@@ -115,7 +161,10 @@ class NotificationService {
           androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
           matchDateTimeComponents: DateTimeComponents.time,
         );
+        return;
       }
+
+      rethrow;
     }
   }
 
@@ -130,13 +179,27 @@ class NotificationService {
   }
 
   Future<void> cancelAll() async {
+    if (!_initialized) {
+      await init(requestPermissions: false);
+    }
     await _localNotifications.cancelAll();
+  }
+
+  Future<void> cancelNotification(int id) async {
+    if (!_initialized) {
+      await init(requestPermissions: false);
+    }
+    await _localNotifications.cancel(id);
   }
 
   Future<void> showNudge(String title, String body) async {
     if (kIsWeb) {
       _showWebSnackbar(title, body);
       return;
+    }
+
+    if (!_initialized) {
+      await init(requestPermissions: false);
     }
 
     const androidDetails = AndroidNotificationDetails(
