@@ -36,12 +36,17 @@ jobs:
         run: |
           python3 -c "
           import json, os
-          json.dump({
+          values = {
             'SUPABASE_URL': os.environ['SUPABASE_URL'].strip(),
             'SUPABASE_ANON_KEY': os.environ['SUPABASE_ANON_KEY'].strip(),
             'GOOGLE_WEB_CLIENT_ID': os.environ['GOOGLE_WEB_CLIENT_ID'].strip(),
             'WEB_AUTH_REDIRECT_URL': os.environ['WEB_AUTH_REDIRECT_URL'].strip(),
-          }, open('secrets.json', 'w'))
+          }
+          with open('.env', 'w', encoding='utf-8') as env_file:
+            for key, value in values.items():
+              env_file.write(f'{key}={value}\n')
+          with open('secrets.json', 'w', encoding='utf-8') as secrets_file:
+            json.dump(values, secrets_file)
           "
 
       - name: Install dependencies
