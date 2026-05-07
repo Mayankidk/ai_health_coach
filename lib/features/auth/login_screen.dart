@@ -1,11 +1,13 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'auth_service.dart';
 import 'onboarding_screen.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../../core/user_repo.dart';
+import '../../core/memory_repository.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -33,18 +35,29 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
     try {
       if (_isLogin) {
-        await _authService.signIn(_emailController.text, _passwordController.text)
-            .timeout(const Duration(seconds: 15), onTimeout: () {
-              throw TimeoutException("Login timed out. Please check your internet connection.");
-            });
+        await _authService
+            .signIn(_emailController.text, _passwordController.text)
+            .timeout(
+              const Duration(seconds: 15),
+              onTimeout: () {
+                throw TimeoutException(
+                  "Login timed out. Please check your internet connection.",
+                );
+              },
+            );
       } else {
-        await _authService.signUp(
-          _emailController.text, 
-          _passwordController.text,
-          displayName: _nameController.text.trim(),
-        ).timeout(const Duration(seconds: 15), onTimeout: () {
-          throw TimeoutException("Account creation timed out.");
-        });
+        await _authService
+            .signUp(
+              _emailController.text,
+              _passwordController.text,
+              displayName: _nameController.text.trim(),
+            )
+            .timeout(
+              const Duration(seconds: 15),
+              onTimeout: () {
+                throw TimeoutException("Account creation timed out.");
+              },
+            );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Check your email for confirmation!")),
@@ -67,7 +80,9 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       if (mounted) {
-        final errorMessage = e is TimeoutException ? "Connection timed out. Please try again." : e.toString();
+        final errorMessage = e is TimeoutException
+            ? "Connection timed out. Please try again."
+            : e.toString();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(errorMessage),
@@ -90,9 +105,9 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
       }
     } finally {
       setState(() => _isLoading = false);
@@ -108,9 +123,9 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
       }
     } finally {
       setState(() => _isLoading = false);
@@ -120,15 +135,16 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _navigateToAppropriateScreen() async {
     final userRepo = GetIt.I<UserRepository>();
     final profile = await userRepo.ensureProfileSynced(_authService.userId!);
-    
+    unawaited(GetIt.I<MemoryRepository>().syncWithSupabase());
+
     if (mounted) {
       final nextScreen = profile?.onboardingCompleted == true
           ? const DashboardScreen()
           : const OnboardingScreen();
-          
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => nextScreen),
-      );
+
+      Navigator.of(
+        context,
+      ).pushReplacement(MaterialPageRoute(builder: (_) => nextScreen));
     }
   }
 
@@ -142,18 +158,15 @@ class _LoginScreenState extends State<LoginScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Center(
-              child: Image.asset(
-                'assets/images/logo_white.png',
-                height: 120,
-              ),
+              child: Image.asset('assets/images/logo_white.png', height: 120),
             ),
             const SizedBox(height: 24),
             Text(
               _isLogin ? "Welcome Back" : "Create Account",
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.primary,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 32),
@@ -198,15 +211,20 @@ class _LoginScreenState extends State<LoginScreen> {
                   ? const SizedBox(
                       height: 20,
                       width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
                     )
                   : Text(_isLogin ? "Login" : "Sign Up"),
             ),
             TextButton(
               onPressed: () => setState(() => _isLogin = !_isLogin),
-              child: Text(_isLogin
-                  ? "Don't have an account? Sign Up"
-                  : "Already have an account? Login"),
+              child: Text(
+                _isLogin
+                    ? "Don't have an account? Sign Up"
+                    : "Already have an account? Login",
+              ),
             ),
             const SizedBox(height: 16),
             const Row(
@@ -222,7 +240,10 @@ class _LoginScreenState extends State<LoginScreen> {
             const SizedBox(height: 16),
             OutlinedButton.icon(
               onPressed: _isLoading ? null : _handleGoogleSignIn,
-              icon: const Text("G", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              icon: const Text(
+                "G",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
               label: const Text("Sign in with Google"),
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 12),

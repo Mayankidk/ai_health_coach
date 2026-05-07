@@ -6,7 +6,6 @@ import 'package:get_it/get_it.dart';
 import 'package:uuid/uuid.dart';
 import 'chat_service.dart';
 import '../auth/auth_service.dart';
-import 'voice_log_dialog.dart';
 import 'memory_vault_screen.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -34,12 +33,15 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     _user = types.User(id: _authService.userId ?? 'guest-id');
-    _addMessage(types.TextMessage(
-      author: _bot,
-      createdAt: DateTime.now().millisecondsSinceEpoch,
-      id: const Uuid().v4(),
-      text: "Hello! I'm Neuralis, your AI Health Coach. How are you feeling today?",
-    ));
+    _addMessage(
+      types.TextMessage(
+        author: _bot,
+        createdAt: DateTime.now().millisecondsSinceEpoch,
+        id: const Uuid().v4(),
+        text:
+            "Hello! I'm Neuralis, your AI Health Coach. How are you feeling today?",
+      ),
+    );
   }
 
   bool _isTyping = false;
@@ -64,10 +66,14 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final history = _messages
           .whereType<types.TextMessage>()
-          .map((m) => {
-                "role": m.author.id == _user.id ? "user" : "assistant",
-                "content": m.text
-              })
+          .skip(1)
+          .take(8)
+          .map(
+            (m) => {
+              "role": m.author.id == _user.id ? "user" : "assistant",
+              "content": m.text,
+            },
+          )
           .toList()
           .cast<Map<String, String>>()
           .reversed
@@ -77,7 +83,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
       if (mounted) {
         setState(() => _isTyping = false);
-        
+
         if (botResponse.trim().isEmpty) {
           throw Exception("Received empty response from AI.");
         }
@@ -113,8 +119,17 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colorScheme = Theme.of(context).colorScheme;
+    final surface = colorScheme.surface;
+    final surfaceVariant = isDark
+        ? const Color(0xFF1D1D1D)
+        : const Color(0xFFF8FAFB);
+    final inputSurface = isDark ? const Color(0xFF232323) : Colors.white;
+    final primaryText = colorScheme.onSurface;
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: colorScheme.background,
       appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -137,7 +152,9 @@ class _ChatScreenState extends State<ChatScreen> {
             tooltip: 'Memory Vault',
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const MemoryVaultScreen()),
+              MaterialPageRoute(
+                builder: (context) => const MemoryVaultScreen(),
+              ),
             ),
           ),
         ],
@@ -145,23 +162,29 @@ class _ChatScreenState extends State<ChatScreen> {
       body: Chat(
         messages: _messages,
         onSendPressed: _handleSendPressed,
-        inputOptions: const InputOptions(
-          keyboardType: TextInputType.multiline,
-        ),
+        inputOptions: const InputOptions(keyboardType: TextInputType.multiline),
         timeFormat: DateFormat.jm(),
         user: _user,
         showUserAvatars: true,
         showUserNames: true,
         theme: DefaultChatTheme(
           primaryColor: const Color(0xFF006B6B),
-          secondaryColor: Colors.white,
-          backgroundColor: const Color(0xFFF8FAFB),
+          secondaryColor: surface,
+          backgroundColor: surfaceVariant,
           // Input Tuning
-          inputBackgroundColor: Colors.white,
-          inputTextColor: const Color(0xFF1A1A1A),
+          inputBackgroundColor: inputSurface,
+          inputTextColor: primaryText,
           inputBorderRadius: const BorderRadius.all(Radius.circular(24)),
-          inputMargin: const EdgeInsets.only(left: 16, right: 16, top: 0, bottom: 8),
-          inputPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          inputMargin: const EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 0,
+            bottom: 8,
+          ),
+          inputPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
           inputSurfaceTintColor: Colors.transparent,
           inputElevation: 2,
 
@@ -174,8 +197,8 @@ class _ChatScreenState extends State<ChatScreen> {
             fontWeight: FontWeight.w400,
             height: 1.3,
           ),
-          receivedMessageBodyTextStyle: const TextStyle(
-            color: Color(0xFF1A1A1A),
+          receivedMessageBodyTextStyle: TextStyle(
+            color: primaryText,
             fontSize: 15,
             fontWeight: FontWeight.w400,
             height: 1.3,

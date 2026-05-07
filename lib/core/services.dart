@@ -39,6 +39,8 @@ Future<void> _ensureHiveReady() async {
   _hiveInitialized = true;
 }
 
+Future<void> ensureCoreHiveReady() => _ensureHiveReady();
+
 Future<Box<UserProfile>> ensureUserProfileBox() async {
   await _ensureHiveReady();
   if (!Hive.isBoxOpen('user_profile')) {
@@ -71,6 +73,14 @@ Future<Box<DailyPlan>> ensureDailyPlansBox() async {
   return Hive.box<DailyPlan>('daily_plans');
 }
 
+Future<Box> ensureAppSettingsBox() async {
+  await _ensureHiveReady();
+  if (!Hive.isBoxOpen('app_settings')) {
+    await Hive.openBox('app_settings');
+  }
+  return Hive.box('app_settings');
+}
+
 Future<Box> ensureAiInsightsBox() async {
   await _ensureHiveReady();
   if (!Hive.isBoxOpen('ai_insights')) {
@@ -86,11 +96,11 @@ Future<void> setupServices({bool isBackground = false}) async {
     }
     return;
   }
-  
+
   if (kDebugMode) {
     print("Starting setupServices (isBackground: $isBackground)...");
   }
-  
+
   // Load .env for local dev. On Android release/CI this file usually is not
   // bundled, so missing dotenv should fall back to dart-define values.
   print("Loading .env...");
@@ -140,6 +150,10 @@ Future<void> setupServices({bool isBackground = false}) async {
     getIt.registerLazySingleton<MemoryRepository>(() => MemoryRepository());
     getIt.registerLazySingleton<UserRepository>(() => UserRepository());
     getIt.registerLazySingleton<NudgeService>(() => NudgeService());
+  }
+
+  if (!isBackground) {
+    await getIt<NotificationService>().init(requestPermissions: true);
   }
   
   _servicesInitialized = true;

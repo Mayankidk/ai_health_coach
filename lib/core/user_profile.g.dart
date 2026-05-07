@@ -27,13 +27,14 @@ class UserProfileAdapter extends TypeAdapter<UserProfile> {
       name: fields[7] == null ? 'User' : fields[7] as String?,
       dailyStepGoal: fields[8] == null ? 10000 : fields[8] as int,
       onboardingCompleted: fields[9] == null ? false : fields[9] as bool,
+      preferredLanguage: fields[10] == null ? 'English' : fields[10] as String,
     );
   }
 
   @override
   void write(BinaryWriter writer, UserProfile obj) {
     writer
-      ..writeByte(10)
+      ..writeByte(11)
       ..writeByte(0)
       ..write(obj.userId)
       ..writeByte(1)
@@ -53,7 +54,9 @@ class UserProfileAdapter extends TypeAdapter<UserProfile> {
       ..writeByte(8)
       ..write(obj.dailyStepGoal)
       ..writeByte(9)
-      ..write(obj.onboardingCompleted);
+      ..write(obj.onboardingCompleted)
+      ..writeByte(10)
+      ..write(obj.preferredLanguage);
   }
 
   @override

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:get_it/get_it.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../../core/user_repo.dart';
+import '../../core/app_theme_controller.dart';
 import '../auth/auth_service.dart';
 import '../../core/user_profile.dart';
 import '../auth/login_screen.dart';
@@ -27,7 +28,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _editField(String field) async {
     final userId = authService.userId;
     if (userId == null) return;
-    
+
     final currentProfile = userRepo.getProfile(userId);
     if (currentProfile == null) return;
 
@@ -38,12 +39,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     String tempDiet = currentProfile.dietaryPreference;
     String tempGoal = currentProfile.fitnessGoal;
     int tempStepGoal = currentProfile.dailyStepGoal;
-    String tempName = (currentProfile.name != null && currentProfile.name!.isNotEmpty) ? currentProfile.name! : (authService.currentUser?.email?.split('@')[0] ?? "User");
+    String tempName =
+        (currentProfile.name != null && currentProfile.name!.isNotEmpty)
+        ? currentProfile.name!
+        : (authService.currentUser?.email?.split('@')[0] ?? "User");
 
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -62,9 +66,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Text(
                 "Edit $field",
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFF1A1A1A),
-                    ),
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
               ),
               const SizedBox(height: 24),
               // Conditionally render the input based on the field
@@ -73,10 +77,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   initialValue: tempName,
                   decoration: InputDecoration(
                     labelText: "Full Name",
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFF006B6B), width: 2),
+                      borderSide: const BorderSide(
+                        color: Color(0xFF006B6B),
+                        width: 2,
+                      ),
                     ),
                   ),
                   onChanged: (v) => tempName = v,
@@ -112,20 +121,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _buildDropdown(
                   "Dietary Preference",
                   tempDiet,
-                  ["None", "Vegetarian", "Vegan", "Keto", "Paleo", "Gluten-Free"],
+                  [
+                    "None",
+                    "Vegetarian",
+                    "Vegan",
+                    "Keto",
+                    "Paleo",
+                    "Gluten-Free",
+                  ],
                   (v) => setModalState(() => tempDiet = v!),
                 ),
               if (field == "Goal")
-                _buildDropdown(
-                  "Primary Goal",
-                  tempGoal,
-                  ["General Health", "Build Muscle", "Lose Weight", "Improve Cardio", "Reduce Stress", "Improve Sleep"],
-                  (v) => setModalState(() => tempGoal = v!),
-                ),
+                _buildDropdown("Primary Goal", tempGoal, [
+                  "General Health",
+                  "Build Muscle",
+                  "Lose Weight",
+                  "Improve Cardio",
+                  "Reduce Stress",
+                  "Improve Sleep",
+                ], (v) => setModalState(() => tempGoal = v!)),
               if (field == "Step Goal")
                 StepGoalEditor(
                   currentGoal: tempStepGoal,
-                  onGoalChanged: (newGoal) => setModalState(() => tempStepGoal = newGoal),
+                  onGoalChanged: (newGoal) =>
+                      setModalState(() => tempStepGoal = newGoal),
                 ),
               const SizedBox(height: 32),
               SizedBox(
@@ -134,13 +153,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   onPressed: () async {
                     // Update only the changed field
                     UserProfile updated = currentProfile;
-                    if (field == "Name") updated = currentProfile.copyWith(name: tempName);
-                    if (field == "Age") updated = currentProfile.copyWith(age: tempAge.toInt());
-                    if (field == "Weight") updated = currentProfile.copyWith(weight: tempWeight);
-                    if (field == "Fitness Level") updated = currentProfile.copyWith(fitnessLevel: tempFitnessLevel);
-                    if (field == "Diet") updated = currentProfile.copyWith(dietaryPreference: tempDiet);
-                    if (field == "Goal") updated = currentProfile.copyWith(fitnessGoal: tempGoal);
-                    if (field == "Step Goal") updated = currentProfile.copyWith(dailyStepGoal: tempStepGoal);
+                    if (field == "Name")
+                      updated = currentProfile.copyWith(name: tempName);
+                    if (field == "Age")
+                      updated = currentProfile.copyWith(age: tempAge.toInt());
+                    if (field == "Weight")
+                      updated = currentProfile.copyWith(weight: tempWeight);
+                    if (field == "Fitness Level")
+                      updated = currentProfile.copyWith(
+                        fitnessLevel: tempFitnessLevel,
+                      );
+                    if (field == "Diet")
+                      updated = currentProfile.copyWith(
+                        dietaryPreference: tempDiet,
+                      );
+                    if (field == "Goal")
+                      updated = currentProfile.copyWith(fitnessGoal: tempGoal);
+                    if (field == "Step Goal")
+                      updated = currentProfile.copyWith(
+                        dailyStepGoal: tempStepGoal,
+                      );
 
                     await userRepo.saveProfile(updated);
                     if (context.mounted) Navigator.pop(context);
@@ -148,10 +180,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF006B6B),
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                     elevation: 0,
                   ),
-                  child: const Text("Save", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  child: const Text(
+                    "Save",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
             ],
@@ -161,15 +198,343 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildSliderRow(BuildContext context, String label, String value, double current, double min, double max, ValueChanged<double> onChanged) {
+  Future<void> _showLanguagePicker(UserProfile profile) async {
+    final languages = <String>[
+      'English',
+      'Hindi',
+      'Spanish',
+      'French',
+      'German',
+      'Portuguese',
+    ];
+
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Preferred language',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'This updates the coach language and your saved profile.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 320,
+                child: ListView.separated(
+                  itemCount: languages.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 4),
+                  itemBuilder: (context, index) {
+                    final language = languages[index];
+                    return RadioListTile<String>(
+                      value: language,
+                      groupValue: profile.preferredLanguage,
+                      onChanged: (value) => Navigator.pop(context, value),
+                      title: Text(language),
+                      activeColor: const Color(0xFF006B6B),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (selected == null || selected == profile.preferredLanguage) return;
+    await userRepo.saveProfile(profile.copyWith(preferredLanguage: selected));
+  }
+
+  Future<void> _showGoalsPicker(UserProfile profile) async {
+    final options = <String>[
+      'General Health',
+      'Build Muscle',
+      'Lose Weight',
+      'Improve Cardio',
+      'Reduce Stress',
+      'Improve Sleep',
+      'Increase Flexibility',
+      'Run Faster',
+      'Eat Better',
+    ];
+
+    final selectedGoals = <String>{
+      ...profile.goals,
+      if (profile.fitnessGoal.isNotEmpty) profile.fitnessGoal,
+    };
+
+    final result = await showModalBottomSheet<List<String>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'health goals',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Pick one or more goals for the coach to track.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  height: 340,
+                  child: ListView.separated(
+                    itemCount: options.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 4),
+                    itemBuilder: (context, index) {
+                      final goal = options[index];
+                      final checked = selectedGoals.contains(goal);
+                      return CheckboxListTile(
+                        value: checked,
+                        onChanged: (value) {
+                          setModalState(() {
+                            if (value == true) {
+                              selectedGoals.add(goal);
+                            } else {
+                              selectedGoals.remove(goal);
+                            }
+                          });
+                        },
+                        activeColor: const Color(0xFF006B6B),
+                        title: Text(goal),
+                        controlAffinity: ListTileControlAffinity.leading,
+                        contentPadding: EdgeInsets.zero,
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context, selectedGoals.toList());
+                    },
+                    child: const Text('Save goals'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (result == null) return;
+    final cleanedGoals = result.where((goal) => goal.trim().isNotEmpty).toList();
+    final primaryGoal = cleanedGoals.isNotEmpty
+        ? cleanedGoals.first
+        : 'General Health';
+    await userRepo.saveProfile(
+      profile.copyWith(
+        fitnessGoal: primaryGoal,
+        goals: cleanedGoals,
+      ),
+    );
+  }
+
+  Future<void> _showSettingsSheet(UserProfile? profile) async {
+    if (profile == null) return;
+
+    final themeController = AppThemeController.instance;
+    var notificationsEnabled = _notificationsEnabled;
+    var darkModeEnabled = themeController.isDarkMode;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Settings',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _MenuTile(
+                    title: 'Theme',
+                    icon: Icons.dark_mode_outlined,
+                    color: Colors.indigo,
+                    onTap: () async {
+                      darkModeEnabled = !darkModeEnabled;
+                      setModalState(() {});
+                      await themeController.setDarkMode(darkModeEnabled);
+                    },
+                    trailing: Switch(
+                      value: darkModeEnabled,
+                      onChanged: (value) async {
+                        darkModeEnabled = value;
+                        setModalState(() {});
+                        await themeController.setDarkMode(value);
+                      },
+                      activeThumbColor: const Color(0xFF006B6B),
+                      activeTrackColor: const Color(0xFF006B6B).withAlpha(100),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _MenuTile(
+                    title: "Notifications",
+                    icon: Icons.notifications_outlined,
+                    color: Colors.purple,
+                    onTap: () {
+                      notificationsEnabled = !notificationsEnabled;
+                      setState(() => _notificationsEnabled = notificationsEnabled);
+                      setModalState(() {});
+                    },
+                    trailing: Switch(
+                      value: notificationsEnabled,
+                      onChanged: (v) {
+                        notificationsEnabled = v;
+                        setState(() => _notificationsEnabled = v);
+                        setModalState(() {});
+                      },
+                      activeThumbColor: const Color(0xFF006B6B),
+                      activeTrackColor: const Color(0xFF006B6B).withAlpha(100),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _MenuTile(
+                    title: "Language",
+                    icon: Icons.language_outlined,
+                    color: Colors.indigo,
+                    onTap: () => _showLanguagePicker(profile),
+                    trailing: Text(
+                      profile.preferredLanguage,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _MenuTile(
+                    title: "Devices & Services",
+                    icon: Icons.watch_outlined,
+                    color: const Color(0xFF006B6B),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        this.context,
+                        MaterialPageRoute(
+                          builder: (_) => DeviceSettingsScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  if (authService.currentUser?.email == _kAdminEmail) ...[
+                    const SizedBox(height: 12),
+                    _MenuTile(
+                      title: "Admin Panel",
+                      icon: Icons.admin_panel_settings_rounded,
+                      color: const Color(0xFF4A00E0),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          this.context,
+                          MaterialPageRoute(
+                            builder: (_) => const AdminScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  _MenuTile(
+                    title: "Log Out",
+                    icon: Icons.logout,
+                    color: Colors.red,
+                    isDestructive: true,
+                    onTap: () {
+                      Navigator.pop(context);
+                      _handleLogout();
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSliderRow(
+    BuildContext context,
+    String label,
+    String value,
+    double current,
+    double min,
+    double max,
+    ValueChanged<double> onChanged,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-            Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF006B6B))),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF006B6B),
+              ),
+            ),
           ],
         ),
         SliderTheme(
@@ -190,7 +555,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildDropdown(String label, String value, List<String> items, ValueChanged<String?> onChanged) {
+  Widget _buildDropdown(
+    String label,
+    String value,
+    List<String> items,
+    ValueChanged<String?> onChanged,
+  ) {
     // Robustness: Ensure value is in the items list to prevent DropdownButton assertion crash
     final effectiveItems = List<String>.from(items);
     if (value.isNotEmpty && !effectiveItems.contains(value)) {
@@ -200,22 +570,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w600)),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            color: Colors.grey,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         const SizedBox(height: 8),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
-            color: Colors.grey.shade50,
+            color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade200),
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
-              value: value.isEmpty ? (effectiveItems.isNotEmpty ? effectiveItems.first : null) : value,
+              value: value.isEmpty
+                  ? (effectiveItems.isNotEmpty ? effectiveItems.first : null)
+                  : value,
               isExpanded: true,
-              items: effectiveItems.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+              items: effectiveItems
+                  .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                  .toList(),
               onChanged: onChanged,
-              dropdownColor: Colors.white,
+              dropdownColor: Theme.of(context).colorScheme.surface,
               borderRadius: BorderRadius.circular(12),
             ),
           ),
@@ -234,18 +617,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
         final profile = box.get(userId);
         final user = authService.currentUser;
-        
+
         if (kDebugMode) {
           print("ProfileScreen: Checking admin access for: ${user?.email}");
         }
 
-        final displayName = (profile != null && profile.name != null && profile.name!.isNotEmpty) 
-            ? profile.name! 
+        final displayName =
+            (profile != null &&
+                profile.name != null &&
+                profile.name!.isNotEmpty)
+            ? profile.name!
             : (user?.email?.split('@')[0] ?? "User");
 
         return Scaffold(
           appBar: AppBar(
             title: const Text("Profile"),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.settings_outlined),
+                tooltip: 'Settings',
+                onPressed: profile == null
+                    ? null
+                    : () => _showSettingsSheet(profile),
+              ),
+            ],
           ),
           body: ListView(
             padding: const EdgeInsets.all(16),
@@ -256,7 +651,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 avatarUrl: user?.userMetadata?['avatar_url'],
                 onTap: () => _editField("Name"),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 20),
               _buildSectionTitle("Health Stats"),
               const SizedBox(height: 12),
               Row(
@@ -310,17 +705,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
-              _buildSectionTitle("Health Goals"),
-              const SizedBox(height: 12),
+              const SizedBox(height: 20),
               if (profile != null)
                 _GoalTile(
-                  title: profile.fitnessGoal.isNotEmpty ? profile.fitnessGoal : "General Health",
+                  title: "Health Goals",
                   icon: Icons.flag,
                   color: const Color(0xFF006B6B),
-                  onTap: () => _editField("Goal"),
+                  onTap: () {
+                    if (profile != null) {
+                      _showGoalsPicker(profile);
+                    }
+                  },
                 ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 5),
               if (profile != null)
                 _GoalTile(
                   title: "${profile.dailyStepGoal ~/ 1000}k Steps Target",
@@ -328,56 +725,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   color: const Color(0xFF00BFA5),
                   onTap: () => _editField("Step Goal"),
                 ),
-              const SizedBox(height: 32),
-              _buildSectionTitle("Account"),
-              const SizedBox(height: 8),
-              _MenuTile(
-                title: "Notifications",
-                icon: Icons.notifications_outlined,
-                color: Colors.purple,
-                onTap: () => setState(() => _notificationsEnabled = !_notificationsEnabled),
-                trailing: Switch(
-                  value: _notificationsEnabled,
-                  onChanged: (v) => setState(() => _notificationsEnabled = v),
-                  activeThumbColor: const Color(0xFF006B6B),
-                  activeTrackColor: const Color(0xFF006B6B).withAlpha(100),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _MenuTile(
-                title: "Devices & Services",
-                icon: Icons.watch_outlined,
-                color: const Color(0xFF006B6B),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => DeviceSettingsScreen()),
-                  );
-                },
-              ),
-              // Admin Panel — only visible to admin user
-              if (authService.currentUser?.email == _kAdminEmail) ...[  
-                const SizedBox(height: 12),
-                _MenuTile(
-                  title: "Admin Panel",
-                  icon: Icons.admin_panel_settings_rounded,
-                  color: const Color(0xFF4A00E0),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const AdminScreen()),
-                    );
-                  },
-                ),
-              ],
-              const SizedBox(height: 12),
-              _MenuTile(
-                title: "Log Out",
-                icon: Icons.logout,
-                color: Colors.red,
-                isDestructive: true,
-                onTap: () => _handleLogout(),
-              ),
             ],
           ),
         );
@@ -392,7 +739,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         title: const Text("Log Out"),
         content: const Text("Are you sure you want to log out?"),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             child: const Text("Log Out", style: TextStyle(color: Colors.red)),
@@ -420,9 +770,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Text(
       title,
       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: Colors.grey[800],
-          ),
+        fontWeight: FontWeight.bold,
+        color: Theme.of(context).colorScheme.onSurface,
+      ),
     );
   }
 }
@@ -442,88 +792,85 @@ class _ProfileHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.teal.shade400, Colors.teal.shade700],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.teal.withAlpha(50),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: Colors.white.withAlpha(30),
-              borderRadius: BorderRadius.circular(20),
+
+          color: colorScheme.surface,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(isDark ? 40 : 25),
+              blurRadius: 15,
             ),
-            child: Container(
-              width: 64,
-              height: 64,
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                image: (avatarUrl != null)
-                    ? DecorationImage(
-                        image: NetworkImage(avatarUrl!),
-                        fit: BoxFit.cover,
-                      )
+                color: const Color(0xFF006B6B).withAlpha(16),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: colorScheme.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: colorScheme.outlineVariant),
+                  image: (avatarUrl != null)
+                      ? DecorationImage(
+                          image: NetworkImage(avatarUrl!),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
+                ),
+                child: (avatarUrl == null)
+                    ? Icon(Icons.person, size: 36, color: colorScheme.primary)
                     : null,
               ),
-              child: (avatarUrl == null)
-                  ? Icon(Icons.person, size: 36, color: Colors.teal.shade700)
-                  : null,
             ),
-          ),
-          const SizedBox(width: 20),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: -0.5,
+            const SizedBox(width: 20),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: colorScheme.onSurface,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  email,
-                  style: TextStyle(
-                    color: Colors.white.withAlpha(180),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
+                  const SizedBox(height: 4),
+                  Text(
+                    email,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white.withAlpha(30),
-              shape: BoxShape.circle,
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF006B6B).withAlpha(12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.edit, color: colorScheme.primary, size: 16),
             ),
-            child: const Icon(Icons.edit, color: Colors.white, size: 16),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
     );
   }
 }
@@ -547,47 +894,69 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade100),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withAlpha(5), blurRadius: 10, offset: const Offset(0, 4)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Expanded(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.bottomLeft,
-                  child: Text(
-                    value,
-                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          color: colorScheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(isDark ? 30 : 25),
+              blurRadius: 10,
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Expanded(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.bottomLeft,
+                    child: Text(
+                      value,
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: colorScheme.onSurface,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-              if (unit.isNotEmpty) ...[
-                const SizedBox(width: 4),
-                Text(unit, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                if (unit.isNotEmpty) ...[
+                  const SizedBox(width: 4),
+                  Text(
+                    unit,
+                    style: TextStyle(
+                      color: colorScheme.onSurfaceVariant,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ],
-            ],
-          ),
-          Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-        ],
+            ),
+            Text(
+              label,
+              style: TextStyle(
+                color: colorScheme.onSurfaceVariant,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
       ),
-    ));
+    );
   }
 }
 
@@ -606,22 +975,40 @@ class _GoalTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.grey.shade50,
+          color: colorScheme.surface,
           borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(
+                Theme.of(context).brightness == Brightness.dark ? 26 : 25,
+              ),
+              blurRadius: 10,
+            ),
+          ],
         ),
         child: Row(
           children: [
             Icon(icon, color: color, size: 20),
             const SizedBox(width: 12),
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontWeight: FontWeight.w500,
+                  color: colorScheme.onSurface,
+                ),
+              ),
+            ),
             const Spacer(),
-            const Icon(Icons.chevron_right, size: 16, color: Colors.grey),
+            Icon(Icons.chevron_right, size: 16, color: colorScheme.onSurfaceVariant),
           ],
         ),
       ),
@@ -648,18 +1035,21 @@ class _MenuTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: colorScheme.surface,
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withAlpha(5),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+              color: Colors.black.withAlpha(
+                Theme.of(context).brightness == Brightness.dark ? 34 : 14,
+              ),
+              blurRadius: 24,
             ),
           ],
         ),
@@ -679,11 +1069,11 @@ class _MenuTile extends StatelessWidget {
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
-                color: isDestructive ? Colors.red : const Color(0xFF1A1A1A),
+                color: isDestructive ? Colors.red : colorScheme.onSurface,
               ),
             ),
             const Spacer(),
-            trailing ?? Icon(Icons.chevron_right, color: Colors.grey[400]),
+            trailing ?? Icon(Icons.chevron_right, color: colorScheme.onSurfaceVariant),
           ],
         ),
       ),

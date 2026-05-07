@@ -12,28 +12,38 @@ class MemoryRepository {
 
   Box<HealthLog> get box => Hive.box<HealthLog>('health_logs');
 
+  Iterable<HealthLog> get memoriesForCurrentUser {
+    final userId = _auth.userId;
+    return box.values.where((memory) {
+      if (userId == null) return memory.userId == null;
+      return memory.userId == userId || memory.userId == null;
+    });
+  }
+
   Future<void> ensureReady() async {
     await ensureHealthLogsBox();
   }
 
   Future<void> saveMemory(HealthLog memory) async {
     await ensureReady();
+    final userId = _auth.userId;
+
     // 1. Assign ID if missing (for backwards compatibility)
-    bool needsIdSave = false;
     if (memory.id == null || memory.id!.isEmpty) {
       memory.id = const Uuid().v4();
-      needsIdSave = true;
+    }
+    if (userId != null && memory.userId != userId) {
+      memory.userId = userId;
     }
 
     // 2. Save locally to Hive
     if (!memory.isInBox) {
       await box.add(memory);
-    } else if (needsIdSave) {
+    } else {
       await memory.save();
     }
 
     // 3. Sync to Supabase
-    final userId = _auth.userId;
     if (userId == null) return;
 
     try {
@@ -55,25 +65,25 @@ class MemoryRepository {
   Future<void> deleteMemory(HealthLog memory) async {
     await ensureReady();
     final memoryId = memory.id;
-    
+    final userId = _auth.userId;
+
     // 1. Delete locally from Hive
     await memory.delete();
 
     // 2. Delete from Supabase
     if (memoryId == null) return;
-    
-    final userId = _auth.userId;
     if (userId == null) return;
 
     try {
-      await _supabase.from('user_memories')
+      await _supabase
+          .from('user_memories')
           .delete()
           .eq('id', memoryId)
           .eq('user_id', userId);
     } catch (e) {
-       if (kDebugMode) {
-         print("MemoryRepository: Delete failed for memory $memoryId: $e");
-       }
+      if (kDebugMode) {
+        print("MemoryRepository: Delete failed for memory $memoryId: $e");
+      }
     }
   }
 
@@ -81,21 +91,27 @@ class MemoryRepository {
   Future<void> syncAll() async {
     final userId = _auth.userId;
     if (userId == null) return;
-    
+
     await ensureReady();
-    final memories = box.values.where((m) => m != null).cast<HealthLog>().toList();
+    final memories = memoriesForCurrentUser.toList();
     if (memories.isEmpty) return;
 
-    bool localUpdatesMade = false;
     final List<Map<String, dynamic>> upsertData = [];
 
     for (var memory in memories) {
+      var needsSave = false;
       if (memory.id == null || memory.id!.isEmpty) {
         memory.id = const Uuid().v4();
-        await memory.save();
-        localUpdatesMade = true;
+        needsSave = true;
       }
-      
+      if (memory.userId == null) {
+        memory.userId = userId;
+        needsSave = true;
+      }
+      if (needsSave) {
+        await memory.save();
+      }
+
       upsertData.add({
         'id': memory.id,
         'user_id': userId,
@@ -107,15 +123,24 @@ class MemoryRepository {
     }
 
     try {
-      await _supabase.from('user_memories').upsert(upsertData, onConflict: 'id');
+      await _supabase
+          .from('user_memories')
+          .upsert(upsertData, onConflict: 'id');
       if (kDebugMode) {
-        print("MemoryRepository: Backfill synced ${upsertData.length} memories.");
+        print(
+          "MemoryRepository: Backfill synced ${upsertData.length} memories.",
+        );
       }
     } catch (e) {
       if (kDebugMode) {
-          print("MemoryRepository: Backfill sync failed: $e");
+        print("MemoryRepository: Backfill sync failed: $e");
       }
     }
+  }
+
+  Future<void> syncWithSupabase() async {
+    await fetchFromSupabase();
+    await syncAll();
   }
 
   /// Fetches memories from Supabase and merges them into the local Hive box.
@@ -134,14 +159,18 @@ class MemoryRepository {
 
       final remoteMemories = response as List<dynamic>;
       if (kDebugMode) {
-        print("MemoryRepository: Fetched ${remoteMemories.length} memories from Supabase.");
+        print(
+          "MemoryRepository: Fetched ${remoteMemories.length} memories from Supabase.",
+        );
       }
 
       // Build a map of existing local memories by their ID for fast lookups
       final localById = <String, HealthLog>{};
       await ensureReady();
       for (final m in box.values) {
-        if (m.id != null && m.id!.isNotEmpty) {
+        if (m.id != null &&
+            m.id!.isNotEmpty &&
+            (m.userId == userId || m.userId == null)) {
           localById[m.id!] = m;
         }
       }
@@ -150,7 +179,9 @@ class MemoryRepository {
         final id = data['id'] as String?;
         final content = data['content'] as String? ?? '';
         final isActive = data['is_active'] as bool? ?? true;
-        final createdAt = DateTime.tryParse(data['created_at'] as String? ?? '') ?? DateTime.now();
+        final createdAt =
+            DateTime.tryParse(data['created_at'] as String? ?? '') ??
+            DateTime.now();
 
         if (id == null) continue;
 
@@ -159,17 +190,18 @@ class MemoryRepository {
           final existing = localById[id]!;
           existing.content = content;
           existing.isActive = isActive;
+          existing.userId = userId;
           await existing.save();
         } else {
           // Add new memory from Supabase
           final newMemory = HealthLog(
+            id: id,
+            userId: userId,
             content: content,
             isActive: isActive,
             createdAt: createdAt,
           );
-          newMemory.id = id;
           await box.add(newMemory);
-          await newMemory.save();
         }
       }
     } catch (e) {

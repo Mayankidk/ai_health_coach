@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../../core/health_log.dart';
-import 'package:intl/intl.dart';
 import '../../core/time_formatter.dart';
 import '../../core/memory_repository.dart';
 import '../../core/services.dart';
@@ -12,7 +11,11 @@ class MemoryVaultScreen extends StatefulWidget {
   @override
   State<MemoryVaultScreen> createState() => _MemoryVaultScreenState();
 
-  static void _openMemoryEditor(BuildContext context, Box<HealthLog> box, {HealthLog? existingLog}) {
+  static void _openMemoryEditor(
+    BuildContext context,
+    Box<HealthLog> box, {
+    HealthLog? existingLog,
+  }) {
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
@@ -34,15 +37,21 @@ class MemoryVaultScreen extends StatefulWidget {
 
 class _MemoryVaultScreenState extends State<MemoryVaultScreen> {
   late final MemoryRepository _memoryRepo;
-  late final Box<HealthLog> _box;
+  late final Future<void> _readyFuture;
+  Box<HealthLog>? _box;
   bool _isFetching = false;
 
   @override
   void initState() {
     super.initState();
     _memoryRepo = getIt<MemoryRepository>();
+    _readyFuture = _prepare();
+  }
+
+  Future<void> _prepare() async {
+    await _memoryRepo.ensureReady();
     _box = _memoryRepo.box;
-    _fetchFromCloud();
+    await _fetchFromCloud();
   }
 
   Future<void> _fetchFromCloud() async {
@@ -54,8 +63,10 @@ class _MemoryVaultScreenState extends State<MemoryVaultScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: colorScheme.background,
       appBar: AppBar(
         centerTitle: false,
         title: const Column(
@@ -72,29 +83,48 @@ class _MemoryVaultScreenState extends State<MemoryVaultScreen> {
           if (_isFetching)
             const Padding(
               padding: EdgeInsets.only(right: 16),
-              child: Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))),
+              child: Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
             ),
         ],
       ),
       body: RefreshIndicator(
         onRefresh: _fetchFromCloud,
-        child: ValueListenableBuilder(
-          valueListenable: _box.listenable(),
-          builder: (context, Box<HealthLog> box, _) {
-            if (box.isEmpty) {
-              // Wrap in a scrollable so RefreshIndicator works on empty state too
-              return ListView(
-                children: [_buildEmptyState()],
-              );
+        child: FutureBuilder<void>(
+          future: _readyFuture,
+          builder: (context, snapshot) {
+            if (_box == null) {
+              return const Center(child: CircularProgressIndicator());
             }
 
-            final allLogs = box.values.toList().reversed.toList();
+            return ValueListenableBuilder(
+              valueListenable: _box!.listenable(),
+              builder: (context, Box<HealthLog> box, _) {
+                final allLogs = _memoryRepo.memoriesForCurrentUser
+                    .toList()
+                    .reversed
+                    .toList();
 
-            return ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              itemCount: allLogs.length,
-              itemBuilder: (context, index) {
-                return _MemoryTile(log: allLogs[index]);
+                if (allLogs.isEmpty) {
+                  // Wrap in a scrollable so RefreshIndicator works on empty state too
+                  return ListView(children: [_buildEmptyState()]);
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  itemCount: allLogs.length,
+                  itemBuilder: (context, index) {
+                    return _MemoryTile(log: allLogs[index]);
+                  },
+                );
               },
             );
           },
@@ -102,10 +132,15 @@ class _MemoryVaultScreenState extends State<MemoryVaultScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'memory_vault_fab',
-        onPressed: () => MemoryVaultScreen._openMemoryEditor(context, _box),
+        onPressed: _box == null
+            ? null
+            : () => MemoryVaultScreen._openMemoryEditor(context, _box!),
         backgroundColor: const Color(0xFF006B6B),
         icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text("New Memory", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        label: const Text(
+          "New Memory",
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
       ),
     );
   }
@@ -117,19 +152,30 @@ class _MemoryVaultScreenState extends State<MemoryVaultScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.auto_awesome_motion_outlined, size: 80, color: Colors.grey[200]),
+            Icon(
+              Icons.auto_awesome_motion_outlined,
+              size: 80,
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
             const SizedBox(height: 24),
-            const Text(
+            Text(
               "Nothing shared yet",
-              style: TextStyle(color: Color(0xFF1A1A1A), fontSize: 20, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             const SizedBox(height: 8),
-            const Padding(
+            Padding(
               padding: EdgeInsets.symmetric(horizontal: 40),
               child: Text(
                 "Your AI Coach will extract health facts from your conversations and list them here.",
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey, fontSize: 14),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontSize: 14,
+                ),
               ),
             ),
           ],
@@ -172,8 +218,8 @@ class _MemoryEditorSheetState extends State<_MemoryEditorSheet> {
       ),
       child: Container(
         padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(
-          color: Colors.white,
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
         ),
         child: Column(
@@ -184,14 +230,24 @@ class _MemoryEditorSheetState extends State<_MemoryEditorSheet> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  widget.existingLog == null ? "Add Manual Memory" : "Edit Memory",
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  widget.existingLog == null
+                      ? "Add Manual Memory"
+                      : "Edit Memory",
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 if (widget.existingLog != null)
                   IconButton(
-                    icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                    icon: const Icon(
+                      Icons.delete_outline,
+                      color: Colors.redAccent,
+                    ),
                     onPressed: () {
-                      getIt<MemoryRepository>().deleteMemory(widget.existingLog!);
+                      getIt<MemoryRepository>().deleteMemory(
+                        widget.existingLog!,
+                      );
                       Navigator.pop(context);
                     },
                   ),
@@ -236,12 +292,19 @@ class _MemoryEditorSheetState extends State<_MemoryEditorSheet> {
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF006B6B),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                   elevation: 0,
                 ),
                 child: Text(
-                  widget.existingLog == null ? "Commit to Memory" : "Update Memory",
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  widget.existingLog == null
+                      ? "Commit to Memory"
+                      : "Update Memory",
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
                 ),
               ),
             ),
@@ -274,91 +337,105 @@ class _MemoryTileState extends State<_MemoryTile> {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.grey.withAlpha(20)),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withAlpha(5),
+            color: Colors.black.withAlpha(
+              Theme.of(context).brightness == Brightness.dark ? 24 : 5,
+            ),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
         ],
       ),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(24),
-            onTap: () {
-            final box = getIt<MemoryRepository>().box;
-            MemoryVaultScreen._openMemoryEditor(context, box, existingLog: widget.log);
-          },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 40,
-                  child: IconButton(
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    icon: Icon(
-                      _isActive ? Icons.psychology : Icons.psychology_outlined,
-                      color: _isActive ? const Color(0xFF006B6B) : Colors.grey[400],
-                      size: 32,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _isActive = !_isActive;
-                      });
-                      
-                      widget.log.isActive = _isActive;
-                      getIt<MemoryRepository>().saveMemory(widget.log);
-                      
-                      ScaffoldMessenger.of(context).clearSnackBars();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            _isActive 
-                              ? "AI coach will refer to this memory" 
+      child: InkWell(
+        borderRadius: BorderRadius.circular(24),
+        onTap: () {
+          final box = getIt<MemoryRepository>().box;
+          MemoryVaultScreen._openMemoryEditor(
+            context,
+            box,
+            existingLog: widget.log,
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 40,
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  icon: Icon(
+                    _isActive ? Icons.psychology : Icons.psychology_outlined,
+                    color: _isActive
+                        ? const Color(0xFF006B6B)
+                        : Colors.grey[400],
+                    size: 32,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _isActive = !_isActive;
+                    });
+
+                    widget.log.isActive = _isActive;
+                    getIt<MemoryRepository>().saveMemory(widget.log);
+
+                    ScaffoldMessenger.of(context).clearSnackBars();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          _isActive
+                              ? "AI coach will refer to this memory"
                               : "AI coach won't refer to this memory",
-                            style: const TextStyle(fontWeight: FontWeight.w500),
-                          ),
-                          behavior: SnackBarBehavior.floating,
-                          backgroundColor: _isActive ? const Color(0xFF006B6B) : Colors.grey[800],
-                          duration: const Duration(seconds: 2),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          margin: const EdgeInsets.all(12),
+                          style: const TextStyle(fontWeight: FontWeight.w500),
                         ),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.log.content,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: _isActive ? const Color(0xFF1A1A1A) : Colors.grey[500],
+                        behavior: SnackBarBehavior.floating,
+                        backgroundColor: _isActive
+                            ? const Color(0xFF006B6B)
+                            : Colors.grey[800],
+                        duration: const Duration(seconds: 2),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
+                        margin: const EdgeInsets.all(12),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        TimeFormatter.formatFullDateTime(widget.log.createdAt),
-                        style: TextStyle(color: Colors.grey[400], fontSize: 11),
-                      ),
-                    ],
-                  ),
+                    );
+                  },
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.log.content,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: _isActive
+                            ? const Color(0xFF1A1A1A)
+                            : Colors.grey[500],
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      TimeFormatter.formatFullDateTime(widget.log.createdAt),
+                      style: TextStyle(color: Colors.grey[400], fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
-      );
+      ),
+    );
   }
 }

@@ -41,6 +41,9 @@ CREATE TRIGGER on_auth_user_created
 ALTER TABLE public.profiles 
 ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN DEFAULT FALSE;
 
+ALTER TABLE public.profiles
+ADD COLUMN IF NOT EXISTS preferred_language TEXT DEFAULT 'English';
+
 -- Verify the table structure
 SELECT * FROM public.profiles LIMIT 1;
 

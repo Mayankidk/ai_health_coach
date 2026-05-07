@@ -24,6 +24,8 @@ class UserProfile {
   final int dailyStepGoal;
   @HiveField(9, defaultValue: false)
   final bool onboardingCompleted;
+  @HiveField(10, defaultValue: "English")
+  final String preferredLanguage;
 
   UserProfile({
     required this.userId,
@@ -36,6 +38,7 @@ class UserProfile {
     this.name = "User",
     this.dailyStepGoal = 10000,
     this.onboardingCompleted = false,
+    this.preferredLanguage = "English",
   });
 
   UserProfile copyWith({
@@ -49,6 +52,7 @@ class UserProfile {
     String? name,
     int? dailyStepGoal,
     bool? onboardingCompleted,
+    String? preferredLanguage,
   }) {
     return UserProfile(
       userId: userId ?? this.userId,
@@ -61,6 +65,7 @@ class UserProfile {
       name: name ?? this.name,
       dailyStepGoal: dailyStepGoal ?? this.dailyStepGoal,
       onboardingCompleted: onboardingCompleted ?? this.onboardingCompleted,
+      preferredLanguage: preferredLanguage ?? this.preferredLanguage,
     );
   }
 }

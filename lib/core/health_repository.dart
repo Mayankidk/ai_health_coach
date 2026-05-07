@@ -216,9 +216,9 @@ class HealthRepository {
       return;
     }
     
-    // By default, we calculate how many days need to be synced by checking the last recorded data.
+    // By default, refresh today plus yesterday so charts stay current on first boot.
     // Use forceAll = true for manual refreshes (force full 7 days).
-    int daysToSync = 1;
+    int daysToSync = 2;
 
     if (forceAll) {
       daysToSync = 7;
@@ -233,7 +233,10 @@ class HealthRepository {
           daysToSync = i + 1;
         }
       }
-      print("HealthRepository: Smart backfill detected gap of $daysToSync days.");
+      if (daysToSync < 2) {
+        daysToSync = 2;
+      }
+      print("HealthRepository: Smart backfill detected window of $daysToSync days.");
     }
     
     final now = DateTime.now();

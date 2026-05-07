@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../chat/voice_log_dialog.dart';
 import '../../core/services.dart';
 import '../../core/health_repository.dart';
 import '../../core/health_data.dart';
@@ -8,8 +7,8 @@ import 'health_summary_card.dart';
 import 'activity_chart.dart';
 import '../../features/auth/auth_service.dart';
 import '../../core/user_repo.dart';
-import '../../features/notifications/nudge_service.dart';
 import '../../features/notifications/notification_service.dart';
+import '../../features/notifications/step_goal_monitor_service.dart';
 import 'package:hive/hive.dart';
 import '../../core/user_profile.dart';
 import '../chat/gemini_service.dart';
@@ -24,9 +23,11 @@ class HomeTab extends StatefulWidget {
   State<HomeTab> createState() => _HomeTabState();
 }
 
-class _HomeTabState extends State<HomeTab> {
+class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   final HealthRepository _healthRepo = getIt<HealthRepository>();
   DateTime _lastSync = DateTime.now();
+  DateTime? _lastOpenRefresh;
+  Future<void>? _refreshFuture;
   List<int> _weeklySteps = [];
   List<double> _weeklyDistance = [];
   List<double> _weeklyCalories = [];
@@ -43,19 +44,57 @@ class _HomeTabState extends State<HomeTab> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadWeeklyData();
     unawaited(_loadDailyInsight());
     // Trigger automatic sync on startup (silent)
     unawaited(_handleRefresh(silent: true));
   }
 
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_handleRefresh(silent: true, throttle: true));
+    }
+  }
+
   Future<void> _loadDailyInsight() async {
     final box = await ensureAiInsightsBox();
+    final cachedInsight = box.get('daily_insight') as String?;
+    final cachedTimestamp = box.get('daily_insight_timestamp') as String?;
+    final usableInsight = _isUsableDailyInsight(cachedInsight) ? cachedInsight : null;
+    if (cachedInsight != null && usableInsight == null) {
+      await box.delete('daily_insight');
+      await box.delete('daily_insight_timestamp');
+    }
     if (!mounted) return;
     setState(() {
-      _dailyInsight = box.get('daily_insight') as String?;
-      _dailyInsightTimestamp = box.get('daily_insight_timestamp') as String?;
+      _dailyInsight = usableInsight;
+      _dailyInsightTimestamp = usableInsight == null ? null : cachedTimestamp;
     });
+  }
+
+  bool _isUsableDailyInsight(String? insight) {
+    if (insight == null) return false;
+    final normalized = insight.trim();
+    if (normalized.length < 12) return false;
+    if (normalized.split(RegExp(r'\s+')).length < 4) return false;
+    return true;
+  }
+
+  String _fallbackDailyInsight(UserProfile profile, HealthData healthData) {
+    final goal = profile.dailyStepGoal > 0 ? profile.dailyStepGoal : 10000;
+    final remainingSteps = (goal - healthData.steps).clamp(0, goal);
+    if (remainingSteps == 0) {
+      return "You hit today's step goal, so protect that momentum with strong recovery tonight.";
+    }
+    return "You are $remainingSteps steps from your goal, so take one focused walk today.";
   }
 
   Future<void> _loadWeeklyData() async {
@@ -77,9 +116,32 @@ class _HomeTabState extends State<HomeTab> {
 
   }
 
-  Future<void> _handleRefresh({bool silent = false}) async {
+  Future<void> _handleRefresh({
+    bool silent = false,
+    bool throttle = false,
+  }) async {
+    final now = DateTime.now();
+    if (throttle &&
+        _lastOpenRefresh != null &&
+        now.difference(_lastOpenRefresh!) < const Duration(minutes: 5)) {
+      return;
+    }
+
+    if (_refreshFuture != null) return _refreshFuture;
+
+    _lastOpenRefresh = now;
+    _refreshFuture = _performRefresh(silent: silent);
+    try {
+      await _refreshFuture;
+    } finally {
+      _refreshFuture = null;
+    }
+  }
+
+  Future<void> _performRefresh({required bool silent}) async {
     // Perform a smart backfill (or full 7-day if manual)
     await _healthRepo.syncFromWearables(forceAll: !silent);
+    await _checkStepGoal();
     
     if (!silent) {
       // Only show notification if manually triggered
@@ -95,6 +157,21 @@ class _HomeTabState extends State<HomeTab> {
         _lastSync = DateTime.now();
       });
     }
+  }
+
+  Future<void> _checkStepGoal() async {
+    final authService = getIt<AuthService>();
+    final userId = authService.userId;
+    if (userId == null) return;
+
+    final profile = getIt<UserRepository>().getProfile(userId);
+    if (profile == null || !profile.onboardingCompleted) return;
+
+    final data = _healthRepo.getDailyData(DateTime.now());
+    await StepGoalMonitorService().checkGoal(
+      profile: profile,
+      currentSteps: data.steps,
+    );
   }
 
   String _getGreeting() {
@@ -800,14 +877,17 @@ class _HomeTabState extends State<HomeTab> {
                               healthData: healthData,
                               currentTime: currentTime,
                             );
+                            final displayInsight = _isUsableDailyInsight(insight)
+                                ? insight
+                                : _fallbackDailyInsight(profile, healthData);
                             final timestamp = "Generated on ${TimeFormatter.formatFullDateTime(DateTime.now())}";
                             
                             final insightBox = await ensureAiInsightsBox();
-                            await insightBox.put('daily_insight', insight);
+                            await insightBox.put('daily_insight', displayInsight);
                             await insightBox.put('daily_insight_timestamp', timestamp);
                             
                             setState(() {
-                              _dailyInsight = insight;
+                              _dailyInsight = displayInsight;
                               _dailyInsightTimestamp = timestamp;
                             });
                           } catch (e) {

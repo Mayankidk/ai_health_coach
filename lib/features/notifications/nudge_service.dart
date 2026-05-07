@@ -1,6 +1,4 @@
 import '../../core/services.dart';
-import '../../core/health_data.dart';
-import '../../core/user_profile.dart';
 import 'notification_service.dart';
 import '../../core/health_repository.dart';
 import '../../core/user_repo.dart';

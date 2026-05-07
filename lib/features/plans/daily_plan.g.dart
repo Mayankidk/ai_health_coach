@@ -64,13 +64,17 @@ class PlanItemAdapter extends TypeAdapter<PlanItem> {
       description: fields[1] as String,
       details: fields[2] as String,
       isCompleted: fields[3] == null ? false : fields[3] as bool,
+      isUserDefined: fields[4] == null ? false : fields[4] as bool,
+      status: fields[5] as String? ?? 'planned',
+      userNote: fields[6] as String?,
+      coachNote: fields[7] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, PlanItem obj) {
     writer
-      ..writeByte(4)
+      ..writeByte(8)
       ..writeByte(0)
       ..write(obj.type)
       ..writeByte(1)
@@ -78,7 +82,15 @@ class PlanItemAdapter extends TypeAdapter<PlanItem> {
       ..writeByte(2)
       ..write(obj.details)
       ..writeByte(3)
-      ..write(obj.isCompleted);
+      ..write(obj.isCompleted)
+      ..writeByte(4)
+      ..write(obj.isUserDefined)
+      ..writeByte(5)
+      ..write(obj.status)
+      ..writeByte(6)
+      ..write(obj.userNote)
+      ..writeByte(7)
+      ..write(obj.coachNote);
   }
 
   @override

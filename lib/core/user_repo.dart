@@ -36,6 +36,7 @@ class UserRepository {
         'goals': profile.goals,
         'daily_step_goal': profile.dailyStepGoal,
         'onboarding_completed': profile.onboardingCompleted,
+        'preferred_language': profile.preferredLanguage,
         'updated_at': DateTime.now().toIso8601String(),
       };
       print("UserRepository: Attempting Supabase sync for ${profile.userId}: $updateMap");
@@ -66,6 +67,7 @@ class UserRepository {
         goals: List<String>.from(response['goals'] ?? []),
         dailyStepGoal: response['daily_step_goal'] ?? 10000,
         onboardingCompleted: response['onboarding_completed'] ?? false,
+        preferredLanguage: response['preferred_language'] ?? 'English',
       );
       await _profileBox.put(userId, profile);
       return profile;
@@ -97,7 +99,13 @@ class UserRepository {
 
   void _scheduleNudges() {
     // Lazy trigger nudge scheduling
-    Future.microtask(() => getIt<NudgeService>().scheduleDailyNudges());
+    Future.microtask(() async {
+      try {
+        await getIt<NudgeService>().scheduleDailyNudges();
+      } catch (e) {
+        print("UserRepository: Failed to schedule daily nudges: $e");
+      }
+    });
   }
 
   Future<void> deleteProfileLocally(String userId) async {

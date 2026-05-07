@@ -18,6 +18,7 @@ class HealthLogAdapter extends TypeAdapter<HealthLog> {
     };
     return HealthLog(
       id: fields[3] as String?,
+      userId: fields[4] as String?,
       content: fields[0] as String,
       isActive: fields[1] as bool,
       createdAt: fields[2] as DateTime,
@@ -27,7 +28,7 @@ class HealthLogAdapter extends TypeAdapter<HealthLog> {
   @override
   void write(BinaryWriter writer, HealthLog obj) {
     writer
-      ..writeByte(4)
+      ..writeByte(5)
       ..writeByte(0)
       ..write(obj.content)
       ..writeByte(1)
@@ -35,7 +36,9 @@ class HealthLogAdapter extends TypeAdapter<HealthLog> {
       ..writeByte(2)
       ..write(obj.createdAt)
       ..writeByte(3)
-      ..write(obj.id);
+      ..write(obj.id)
+      ..writeByte(4)
+      ..write(obj.userId);
   }
 
   @override

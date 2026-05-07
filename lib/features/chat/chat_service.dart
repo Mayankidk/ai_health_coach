@@ -14,16 +14,18 @@ class ChatService {
   final MemoryRepository _memoryRepo = getIt<MemoryRepository>();
   final AuthService _auth = getIt<AuthService>();
 
-  Future<String> sendMessage(String text, List<Map<String, String>> history) async {
+  Future<String> sendMessage(
+    String text,
+    List<Map<String, String>> history,
+  ) async {
     try {
       final gemini = getIt<GeminiService>();
       await _memoryRepo.ensureReady();
 
       // 1. Fetch active memory logs to give context to Gemini
-      final activeLogs = _memoryRepo.box
-          .values
-          .where((log) => log != null && log.isActive)
-          .map((log) => log.content ?? "")
+      final activeLogs = _memoryRepo.memoriesForCurrentUser
+          .where((log) => log.isActive)
+          .map((log) => log.content)
           .where((content) => content.isNotEmpty)
           .toList();
 
@@ -33,8 +35,10 @@ class ChatService {
 
       // 2. Get the response from Gemini with active memory context
       final response = await gemini.chat(text, history, activeLogs: activeLogs);
-      
-      final preview = response.length > 20 ? "${response.substring(0, 20)}..." : response;
+
+      final preview = response.length > 20
+          ? "${response.substring(0, 20)}..."
+          : response;
       print("ChatService: Received response: '$preview'");
 
       // 3. In the background, update the Daily Plan and extract memory insights
@@ -51,7 +55,7 @@ class ChatService {
     try {
       // Add a small delay to let the API key cool down after the main response
       await Future.delayed(const Duration(seconds: 1));
-      
+
       final userId = _auth.userId;
       if (userId == null) return;
 
@@ -74,7 +78,10 @@ class ChatService {
 
       // B. Extract and save new health insights (suggested logs)
       print("ChatService: Extracting insights in background...");
-      final insights = await getIt<GeminiService>().extractInsights(userMessage, aiResponse);
+      final insights = await getIt<GeminiService>().extractInsights(
+        userMessage,
+        aiResponse,
+      );
       if (insights.isNotEmpty) {
         for (final insightWithTag in insights) {
           final isAuto = insightWithTag.startsWith('[AUTO]');
@@ -82,11 +89,13 @@ class ChatService {
               .replaceFirst('[AUTO]', '')
               .replaceFirst('[SUGGEST]', '')
               .trim();
-          
+
           if (cleanContent.isEmpty) continue;
 
           // Avoid duplicates
-          final exists = _memoryRepo.box.values.any((l) => l != null && l.content.toLowerCase() == cleanContent.toLowerCase());
+          final exists = _memoryRepo.memoriesForCurrentUser.any(
+            (l) => l.content.toLowerCase() == cleanContent.toLowerCase(),
+          );
           if (!exists) {
             final newLog = HealthLog(
               content: cleanContent,
@@ -94,7 +103,9 @@ class ChatService {
               createdAt: DateTime.now(),
             );
             await _memoryRepo.saveMemory(newLog);
-            print("ChatService: Saved ${isAuto ? 'ACTIVE' : 'SUGGESTED'} insight: $cleanContent");
+            print(
+              "ChatService: Saved ${isAuto ? 'ACTIVE' : 'SUGGESTED'} insight: $cleanContent",
+            );
           }
         }
       }

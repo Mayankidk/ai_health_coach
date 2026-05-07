@@ -89,6 +89,20 @@ class GeminiService {
     });
   }
 
+  Future<String> analyzeMealSwap({
+    required UserProfile profile,
+    required HealthData healthData,
+    required String originalItem,
+    required String replacementText,
+  }) async {
+    return _invokeText('analyzeMealSwap', {
+      'profile': _profileToJson(profile),
+      'healthData': _healthDataToJson(healthData),
+      'originalItem': originalItem,
+      'replacementText': replacementText,
+    });
+  }
+
   Future<String> _invokeText(
     String action,
     Map<String, dynamic> payload,
@@ -145,6 +159,7 @@ class GeminiService {
       'name': profile.name,
       'dailyStepGoal': profile.dailyStepGoal,
       'onboardingCompleted': profile.onboardingCompleted,
+      'preferredLanguage': profile.preferredLanguage,
     };
   }
 

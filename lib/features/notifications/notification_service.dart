@@ -26,7 +26,7 @@ class NotificationService {
       }
       return;
     }
-    
+
     // Initialize Timezone
     tz.initializeTimeZones();
     try {
@@ -41,7 +41,7 @@ class NotificationService {
       }
       // Fallback is handled by initializeTimeZones() typically defaulting to UTC
     }
-    
+
     const androidSettings =
         AndroidInitializationSettings('@mipmap/launcher_icon');
     const initSettings = InitializationSettings(android: androidSettings);
@@ -70,12 +70,10 @@ class NotificationService {
 
       final grantedNotifications =
           await androidImpl?.requestNotificationsPermission();
-      final grantedExactAlarms =
-          await androidImpl?.requestExactAlarmsPermission();
 
       if (kDebugMode) {
         print(
-          "NotificationService: notificationPermission=$grantedNotifications, exactAlarmPermission=$grantedExactAlarms",
+          "NotificationService: notificationPermission=$grantedNotifications",
         );
       }
     } catch (e) {
@@ -118,54 +116,30 @@ class NotificationService {
 
     final scheduledTime = _nextInstanceOfTime(hour, minute);
 
-    try {
-      await _localNotifications.zonedSchedule(
-        id,
-        title,
-        body,
-        scheduledTime,
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'daily_nudges',
-            'Daily Nudges',
-            channelDescription: 'Scheduled reminders and health tips',
-            importance: Importance.high,
-            priority: Priority.high,
-          ),
+    await _localNotifications.zonedSchedule(
+      id,
+      title,
+      body,
+      scheduledTime,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'daily_nudges',
+          'Daily Nudges',
+          channelDescription: 'Scheduled reminders and health tips',
+          importance: Importance.high,
+          priority: Priority.high,
         ),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        matchDateTimeComponents: DateTimeComponents.time,
-      );
-    } catch (e) {
-      if (kDebugMode) {
-        print("NotificationService: Failed to schedule daily notification: $e");
-      }
+      ),
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      matchDateTimeComponents: DateTimeComponents.time,
+    );
+  }
 
-      // Fallback to non-exact if exact fails
-      if (e.toString().contains('exact_alarms_not_permitted') ||
-          e.toString().contains('Exact alarms are not permitted')) {
-        await _localNotifications.zonedSchedule(
-          id,
-          title,
-          body,
-          scheduledTime,
-          const NotificationDetails(
-            android: AndroidNotificationDetails(
-              'daily_nudges',
-              'Daily Nudges',
-              channelDescription: 'Scheduled reminders and health tips',
-              importance: Importance.high,
-              priority: Priority.high,
-            ),
-          ),
-          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-          matchDateTimeComponents: DateTimeComponents.time,
-        );
-        return;
-      }
-
-      rethrow;
+  Future<List<PendingNotificationRequest>> pendingNotifications() async {
+    if (!_initialized) {
+      await init(requestPermissions: false);
     }
+    return _localNotifications.pendingNotificationRequests();
   }
 
   tz.TZDateTime _nextInstanceOfTime(int hour, int minute) {
