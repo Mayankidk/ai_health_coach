@@ -224,16 +224,16 @@ RULES:
 1. IGNORE temporary states (e.g., "I'm tired today").
 2. FOCUS on diet, injuries, chronic conditions, metabolic traits, and hard preferences.
 3. Format: "[TAG] User [fact]" (e.g., "[AUTO] User is pure veg").
-4. return EMPTY if nothing new is found.
+4. If nothing new is found, return exactly EMPTY with no markdown, heading, bullet, or extra text.
 Examples that should count: "I have high metabolism", "I have low metabolism", "I can't eat apples", "I am lactose intolerant".
 `, { maxOutputTokens: 120, temperature: 0.2 });
 
-  if (!text.trim() || text.trim().toUpperCase() === "EMPTY") return [];
+  if (isEmptyInsightSentinel(text)) return [];
 
   return text
     .split("\n")
     .map((line) => line.trim().replace(/^-+\s*/, ""))
-    .filter((line) => line.length > 5);
+    .filter((line) => line.length > 5 && !isEmptyInsightSentinel(line));
 }
 
 async function getSmartNudge(body: JsonMap) {
@@ -477,6 +477,15 @@ function isUsableInsight(value: string) {
   const trimmed = value.trim();
   if (trimmed.length < 12) return false;
   return trimmed.split(/\s+/).length >= 4;
+}
+
+function isEmptyInsightSentinel(value: string) {
+  const normalized = value
+    .replace(/^[#>\-*\s]+/, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
+  return !normalized || normalized === "EMPTY" || normalized === "RETURN EMPTY";
 }
 
 function normalizeForCompare(value: string) {

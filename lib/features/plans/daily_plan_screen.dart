@@ -997,7 +997,6 @@ class _DailyPlanScreenState extends State<DailyPlanScreen> {
   }
 
   Future<void> _showSwapDialog(int index, PlanItem item) async {
-    final controller = TextEditingController(text: item.userNote ?? '');
     final replacement = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
@@ -1005,44 +1004,8 @@ class _DailyPlanScreenState extends State<DailyPlanScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 20,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Swap this card',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              decoration: const InputDecoration(
-                labelText: 'What did you do instead?',
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 3,
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context, controller.text.trim()),
-                child: const Text('Save swap'),
-              ),
-            ),
-          ],
-        ),
-      ),
+      builder: (context) => _SwapItemSheet(initialNote: item.userNote ?? ''),
     );
-
-    controller.dispose();
 
     if (replacement == null || replacement.isEmpty) return;
     String coachNote =
@@ -1082,13 +1045,6 @@ class _DailyPlanScreenState extends State<DailyPlanScreen> {
     PlanItem? existingItem,
     int? index,
   }) async {
-    final titleController = TextEditingController(
-      text: existingItem?.description ?? '',
-    );
-    final detailsController = TextEditingController(
-      text: existingItem?.details ?? '',
-    );
-    String selectedType = existingItem?.type ?? 'extra';
     final isEditing = existingItem != null && index != null;
 
     final saved = await showModalBottomSheet<PlanItem>(
@@ -1098,107 +1054,11 @@ class _DailyPlanScreenState extends State<DailyPlanScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) => Padding(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 20,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                isEditing ? 'Edit your card' : 'Add your own card',
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                value: selectedType,
-                items: const [
-                  DropdownMenuItem(value: 'extra', child: Text('Extra task')),
-                  DropdownMenuItem(value: 'meal', child: Text('Meal')),
-                  DropdownMenuItem(value: 'workout', child: Text('Workout')),
-                  DropdownMenuItem(
-                    value: 'hydration',
-                    child: Text('Hydration'),
-                  ),
-                  DropdownMenuItem(value: 'recovery', child: Text('Recovery')),
-                ],
-                onChanged: (value) {
-                  if (value == null) return;
-                  setModalState(() => selectedType = value);
-                },
-                decoration: const InputDecoration(
-                  labelText: 'Card type',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: titleController,
-                decoration: const InputDecoration(
-                  labelText: 'Title',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: detailsController,
-                decoration: const InputDecoration(
-                  labelText: 'Details',
-                  border: OutlineInputBorder(),
-                ),
-                maxLines: 3,
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    final title = titleController.text.trim();
-                    final details = detailsController.text.trim();
-                    if (title.isEmpty || details.isEmpty) return;
-                    Navigator.pop(
-                      context,
-                      PlanItem(
-                        type: selectedType,
-                        description: title,
-                        details: details,
-                        isCompleted: existingItem?.isDone ?? false,
-                        isUserDefined: true,
-                        status: existingItem?.status ?? 'planned',
-                        userNote: existingItem?.userNote,
-                        coachNote: existingItem?.coachNote,
-                      ),
-                    );
-                  },
-                  child: Text(isEditing ? 'Update card' : 'Add card'),
-                ),
-              ),
-              if (isEditing) ...[
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: () => Navigator.pop(
-                    context,
-                    PlanItem(type: '__delete__', description: '', details: ''),
-                  ),
-                  child: const Text('Delete card'),
-                ),
-              ],
-            ],
-          ),
-        ),
+      builder: (context) => _CustomItemSheet(
+        existingItem: existingItem,
+        isEditing: isEditing,
       ),
     );
-
-    titleController.dispose();
-    detailsController.dispose();
 
     if (saved == null) return;
 
@@ -1259,6 +1119,209 @@ class _DailyPlanScreenState extends State<DailyPlanScreen> {
     if (mounted) {
       setState(() => _currentPlan = adapted);
     }
+  }
+}
+
+class _SwapItemSheet extends StatefulWidget {
+  final String initialNote;
+
+  const _SwapItemSheet({required this.initialNote});
+
+  @override
+  State<_SwapItemSheet> createState() => _SwapItemSheetState();
+}
+
+class _SwapItemSheetState extends State<_SwapItemSheet> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialNote);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Swap this card',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _controller,
+            decoration: const InputDecoration(
+              labelText: 'What did you do instead?',
+              border: OutlineInputBorder(),
+            ),
+            maxLines: 3,
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () =>
+                  Navigator.pop(context, _controller.text.trim()),
+              child: const Text('Save swap'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CustomItemSheet extends StatefulWidget {
+  final PlanItem? existingItem;
+  final bool isEditing;
+
+  const _CustomItemSheet({
+    required this.existingItem,
+    required this.isEditing,
+  });
+
+  @override
+  State<_CustomItemSheet> createState() => _CustomItemSheetState();
+}
+
+class _CustomItemSheetState extends State<_CustomItemSheet> {
+  late final TextEditingController _titleController;
+  late final TextEditingController _detailsController;
+  late String _selectedType;
+
+  @override
+  void initState() {
+    super.initState();
+    _titleController = TextEditingController(
+      text: widget.existingItem?.description ?? '',
+    );
+    _detailsController = TextEditingController(
+      text: widget.existingItem?.details ?? '',
+    );
+    _selectedType = widget.existingItem?.type ?? 'extra';
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _detailsController.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final title = _titleController.text.trim();
+    final details = _detailsController.text.trim();
+    if (title.isEmpty || details.isEmpty) return;
+
+    Navigator.pop(
+      context,
+      PlanItem(
+        type: _selectedType,
+        description: title,
+        details: details,
+        isCompleted: widget.existingItem?.isDone ?? false,
+        isUserDefined: true,
+        status: widget.existingItem?.status ?? 'planned',
+        userNote: widget.existingItem?.userNote,
+        coachNote: widget.existingItem?.coachNote,
+      ),
+    );
+  }
+
+  void _delete() {
+    Navigator.pop(
+      context,
+      PlanItem(type: '__delete__', description: '', details: ''),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            widget.isEditing ? 'Edit your card' : 'Add your own card',
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            value: _selectedType,
+            items: const [
+              DropdownMenuItem(value: 'extra', child: Text('Extra task')),
+              DropdownMenuItem(value: 'meal', child: Text('Meal')),
+              DropdownMenuItem(value: 'workout', child: Text('Workout')),
+              DropdownMenuItem(value: 'hydration', child: Text('Hydration')),
+              DropdownMenuItem(value: 'recovery', child: Text('Recovery')),
+            ],
+            onChanged: (value) {
+              if (value == null) return;
+              setState(() => _selectedType = value);
+            },
+            decoration: const InputDecoration(
+              labelText: 'Card type',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _titleController,
+            decoration: const InputDecoration(
+              labelText: 'Title',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _detailsController,
+            decoration: const InputDecoration(
+              labelText: 'Details',
+              border: OutlineInputBorder(),
+            ),
+            maxLines: 3,
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _save,
+              child: Text(widget.isEditing ? 'Update card' : 'Add card'),
+            ),
+          ),
+          if (widget.isEditing) ...[
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: _delete,
+              child: const Text('Delete card'),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }
 
