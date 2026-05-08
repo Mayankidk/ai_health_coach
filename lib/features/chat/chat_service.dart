@@ -90,7 +90,7 @@ class ChatService {
               .replaceFirst('[SUGGEST]', '')
               .trim();
 
-          if (cleanContent.isEmpty) continue;
+          if (!_memoryRepo.isUsableMemoryContent(cleanContent)) continue;
 
           // Avoid duplicates
           final exists = _memoryRepo.memoriesForCurrentUser.any(

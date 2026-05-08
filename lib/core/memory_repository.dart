@@ -12,9 +12,21 @@ class MemoryRepository {
 
   Box<HealthLog> get box => Hive.box<HealthLog>('health_logs');
 
+  bool isUsableMemoryContent(String content) {
+    final normalized = content
+        .replaceAll(RegExp(r'^[#>\-\*\s]+'), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim()
+        .toUpperCase();
+    return normalized.isNotEmpty &&
+        normalized != 'EMPTY' &&
+        normalized != 'RETURN EMPTY';
+  }
+
   Iterable<HealthLog> get memoriesForCurrentUser {
     final userId = _auth.userId;
     return box.values.where((memory) {
+      if (!isUsableMemoryContent(memory.content)) return false;
       if (userId == null) return memory.userId == null;
       return memory.userId == userId || memory.userId == null;
     });
@@ -26,6 +38,11 @@ class MemoryRepository {
 
   Future<void> saveMemory(HealthLog memory) async {
     await ensureReady();
+    if (!isUsableMemoryContent(memory.content)) {
+      if (memory.isInBox) await memory.delete();
+      return;
+    }
+
     final userId = _auth.userId;
 
     // 1. Assign ID if missing (for backwards compatibility)
@@ -184,6 +201,7 @@ class MemoryRepository {
             DateTime.now();
 
         if (id == null) continue;
+        if (!isUsableMemoryContent(content)) continue;
 
         if (localById.containsKey(id)) {
           // Update existing local memory

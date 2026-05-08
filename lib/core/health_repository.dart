@@ -29,7 +29,7 @@ class HealthRepository {
   final Health? _health = kIsWeb ? null : Health();
   final SupabaseClient _supabase = Supabase.instance.client;
   final AuthService _auth = getIt<AuthService>();
-  
+
   final _controller = StreamController<HealthData>.broadcast();
   Stream<HealthData> get healthStream => _controller.stream;
 
@@ -38,10 +38,10 @@ class HealthRepository {
   bool _initialized = false;
 
   HealthData _currentData = HealthData(
-    steps: 5000,
-    sleepMinutes: 480,
-    activeEnergyBurned: 225.0, // Initial estimate (5000 * 70 * 0.00045)
-    hrv: 70.0,
+    steps: 0,
+    sleepMinutes: 0,
+    activeEnergyBurned: 0.0,
+    hrv: 0.0,
   );
 
   double _calculateActiveBurn(int steps, double weight, int age) {
@@ -54,7 +54,7 @@ class HealthRepository {
     // Mifflin-St Jeor Equation (Approximate without height/gender)
     // Base formula: (10 * weight) + (6.25 * height) - (5 * age) + s
     // Using average height (170cm) and neutral gender offset (s=0)
-    double height = 170.0; 
+    double height = 170.0;
     double dailyBMR = (10 * weight) + (6.25 * height) - (5 * age);
     return dailyBMR * (hours / 24.0);
   }
@@ -65,7 +65,7 @@ class HealthRepository {
     final end = date.day == DateTime.now().day && date.month == DateTime.now().month && date.year == DateTime.now().year
         ? DateTime.now()
         : DateTime(date.year, date.month, date.day, 23, 59, 59);
-    
+
     try {
       int? steps = await _health?.getTotalStepsInInterval(start, end);
       return steps ?? 0;
@@ -77,12 +77,12 @@ class HealthRepository {
 
   Future<double> _getTotalKcalForDay(DateTime date) async {
     if (kIsWeb) return _currentData.activeEnergyBurned ?? 0.0;
-    
+
     final start = DateTime(date.year, date.month, date.day);
     final end = date.day == DateTime.now().day && date.month == DateTime.now().month && date.year == DateTime.now().year
         ? DateTime.now()
         : DateTime(date.year, date.month, date.day, 23, 59, 59);
-    
+
     try {
       // 1. Fetch Active Calories
       List<HealthDataPoint> activeData = await _health?.getHealthDataFromTypes(
@@ -90,7 +90,7 @@ class HealthRepository {
         startTime: start,
         endTime: end,
       ) ?? [];
-      
+
       double activeKcal = 0;
       if (activeData.isNotEmpty) {
         for (var p in activeData) {
@@ -123,9 +123,9 @@ class HealthRepository {
           age = profile.age;
         }
       }
-      
-      double hoursToCount = (date.day == DateTime.now().day) 
-          ? DateTime.now().hour + (DateTime.now().minute / 60.0) 
+
+      double hoursToCount = (date.day == DateTime.now().day)
+          ? DateTime.now().hour + (DateTime.now().minute / 60.0)
           : 24.0;
       double bmrKcal = _calculateBMR(weight, age, hours: hoursToCount);
 
@@ -159,16 +159,16 @@ class HealthRepository {
     try {
       await ensureHealthDataBox();
       _box = Hive.box<HealthData>('health_data');
-      
+
       // Load last saved today's data if it exists
       final todayStr = DateTime.now().toIso8601String().split('T')[0];
       final savedData = _box?.get(todayStr);
       if (savedData != null) {
         _currentData = savedData;
       }
+      _controller.add(_currentData);
 
       if (kIsWeb) {
-        _controller.add(_currentData);
         _initialized = true;
         return;
       }
@@ -215,7 +215,7 @@ class HealthRepository {
       await _syncToCloud(DateTime.now(), _currentData);
       return;
     }
-    
+
     // By default, refresh today plus yesterday so charts stay current on first boot.
     // Use forceAll = true for manual refreshes (force full 7 days).
     int daysToSync = 2;
@@ -238,29 +238,38 @@ class HealthRepository {
       }
       print("HealthRepository: Smart backfill detected window of $daysToSync days.");
     }
-    
+
     final now = DateTime.now();
     for (int i = 0; i < daysToSync; i++) {
       final targetDate = now.subtract(Duration(days: i));
       final dateStr = targetDate.toIso8601String().split('T')[0];
-      
+      final savedData = _box?.get(dateStr);
+
       final steps = await _getStepsForDay(targetDate);
       final activeKcal = await _getTotalKcalForDay(targetDate);
-      
+
       final dayData = HealthData(
         steps: steps,
-        sleepMinutes: i == 0 ? _currentData.sleepMinutes : 480,
+        sleepMinutes: i == 0
+            ? _currentData.sleepMinutes
+            : !forceAll && savedData != null
+                ? savedData.sleepMinutes
+                : 480,
         activeEnergyBurned: activeKcal,
-        hrv: i == 0 ? _currentData.hrv : 70,
+        hrv: i == 0
+            ? _currentData.hrv
+            : !forceAll && savedData != null
+                ? savedData.hrv
+                : 70,
       );
-      
+
       await _box?.put(dateStr, dayData);
-      
+
       if (i == 0) {
         _currentData = dayData;
         _controller.add(_currentData);
       }
-      
+
       await _syncToCloud(targetDate, dayData);
     }
     print("HealthRepository: ${daysToSync}-day sync complete.");
@@ -269,14 +278,14 @@ class HealthRepository {
   Future<void> updateManualSleep(int minutes) async {
     await init();
     final todayStr = DateTime.now().toIso8601String().split('T')[0];
-    
+
     _currentData = HealthData(
       steps: _currentData.steps,
       sleepMinutes: minutes,
       activeEnergyBurned: _currentData.activeEnergyBurned,
       hrv: _currentData.hrv,
     );
-    
+
     await _box?.put(todayStr, _currentData);
     _controller.add(_currentData);
     await _syncToCloud(DateTime.now(), _currentData);
@@ -286,14 +295,14 @@ class HealthRepository {
   Future<void> updateManualHRV(double hrv) async {
     await init();
     final todayStr = DateTime.now().toIso8601String().split('T')[0];
-    
+
     _currentData = HealthData(
       steps: _currentData.steps,
       sleepMinutes: _currentData.sleepMinutes,
       activeEnergyBurned: _currentData.activeEnergyBurned,
       hrv: hrv,
     );
-    
+
     await _box?.put(todayStr, _currentData);
     _controller.add(_currentData);
     await _syncToCloud(DateTime.now(), _currentData);
@@ -305,7 +314,7 @@ class HealthRepository {
     if (userId == null) return;
 
     final dateStr = date.toIso8601String().split('T')[0];
-    
+
     try {
       await _supabase.from('health_logs').upsert({
         'user_id': userId,
@@ -325,19 +334,20 @@ class HealthRepository {
     if (_box == null) {
       return _currentData;
     }
-    return _currentData;
+    final dateStr = date.toIso8601String().split('T')[0];
+    return _box?.get(dateStr) ?? _currentData;
   }
 
   Future<List<int>> getWeeklySteps() async {
     await init();
     final List<int> steps = [];
     final today = DateTime.now();
-    
+
     for (int i = 6; i >= 0; i--) {
       final date = today.subtract(Duration(days: i));
       final dateStr = date.toIso8601String().split('T')[0];
       final saved = _box?.get(dateStr);
-      
+
       if (saved != null) {
         steps.add(saved.steps);
       } else {
@@ -400,17 +410,17 @@ class HealthRepository {
     }
     return calories;
   }
-  
+
   Future<List<int>> getWeeklySleep() async {
     await init();
     final List<int> sleep = [];
     final today = DateTime.now();
-    
+
     for (int i = 6; i >= 0; i--) {
       final date = today.subtract(Duration(days: i));
       final dateStr = date.toIso8601String().split('T')[0];
       final saved = _box?.get(dateStr);
-      
+
       if (saved != null) {
         sleep.add(saved.sleepMinutes);
       } else {
@@ -428,12 +438,12 @@ class HealthRepository {
     await init();
     final List<double> hrv = [];
     final today = DateTime.now();
-    
+
     for (int i = 6; i >= 0; i--) {
       final date = today.subtract(Duration(days: i));
       final dateStr = date.toIso8601String().split('T')[0];
       final saved = _box?.get(dateStr);
-      
+
       if (saved != null) {
         hrv.add(saved.hrv ?? 0.0);
       } else {
@@ -512,16 +522,16 @@ class HealthRepository {
     await init();
     print("HealthRepository: Starting permission request...");
     if (kIsWeb) return HealthConnectionStatus.granted;
-    
+
     if (defaultTargetPlatform == TargetPlatform.android) {
       try {
         final status = await _health?.getHealthConnectSdkStatus();
         final statusStr = status.toString();
         print("HealthRepository: Health Connect Status is: $statusStr");
-        
-        if (statusStr.contains('Installed') || 
-            statusStr.contains('INSTALLED') || 
-            statusStr.contains('Available') || 
+
+        if (statusStr.contains('Installed') ||
+            statusStr.contains('INSTALLED') ||
+            statusStr.contains('Available') ||
             statusStr.contains('AVAILABLE')) {
           // OK - Means the SDK is ready or the Provider app is installed
         } else if (statusStr.contains('Update') || statusStr.contains('UPDATE')) {
@@ -568,10 +578,10 @@ class HealthRepository {
       print("HealthRepository: Bulk failed. Trying curated essential set...");
       var essentialTypes = [HealthDataType.STEPS, HealthDataType.ACTIVE_ENERGY_BURNED];
       bool? essentialSuccess = await _health?.requestAuthorization(essentialTypes);
-      
+
       if (essentialSuccess == true) {
         print("HealthRepository: Essential permissions granted.");
-        return HealthConnectionStatus.granted; 
+        return HealthConnectionStatus.granted;
       }
 
       // Same pattern: verify before giving up
@@ -629,7 +639,7 @@ class HealthRepository {
 
     final now = DateTime.now();
     final midnight = DateTime(now.year, now.month, now.day);
-    
+
     try {
       int? steps = await _health?.getTotalStepsInInterval(midnight, now);
       return steps ?? 0;

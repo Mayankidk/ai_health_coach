@@ -197,6 +197,7 @@ class _MemoryEditorSheet extends StatefulWidget {
 
 class _MemoryEditorSheetState extends State<_MemoryEditorSheet> {
   late final TextEditingController _controller;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -245,10 +246,9 @@ class _MemoryEditorSheetState extends State<_MemoryEditorSheet> {
                       color: Colors.redAccent,
                     ),
                     onPressed: () {
-                      getIt<MemoryRepository>().deleteMemory(
-                        widget.existingLog!,
-                      );
+                      final existingLog = widget.existingLog!;
                       Navigator.pop(context);
+                      getIt<MemoryRepository>().deleteMemory(existingLog);
                     },
                   ),
               ],
@@ -273,23 +273,27 @@ class _MemoryEditorSheetState extends State<_MemoryEditorSheet> {
               width: double.infinity,
               height: 56,
               child: ElevatedButton(
-                onPressed: () async {
-                  if (_controller.text.trim().isNotEmpty) {
-                    final memoryRepo = getIt<MemoryRepository>();
-                    if (widget.existingLog == null) {
-                      final newLog = HealthLog(
-                        content: _controller.text.trim(),
-                        isActive: true,
-                        createdAt: DateTime.now(),
-                      );
-                      await memoryRepo.saveMemory(newLog);
-                    } else {
-                      widget.existingLog!.content = _controller.text.trim();
-                      await memoryRepo.saveMemory(widget.existingLog!);
-                    }
-                    if (mounted) Navigator.pop(context);
-                  }
-                },
+                onPressed: _isSaving
+                    ? null
+                    : () async {
+                        final content = _controller.text.trim();
+                        if (content.isEmpty) return;
+
+                        setState(() => _isSaving = true);
+                        final memoryRepo = getIt<MemoryRepository>();
+                        if (widget.existingLog == null) {
+                          final newLog = HealthLog(
+                            content: content,
+                            isActive: true,
+                            createdAt: DateTime.now(),
+                          );
+                          await memoryRepo.saveMemory(newLog);
+                        } else {
+                          widget.existingLog!.content = content;
+                          await memoryRepo.saveMemory(widget.existingLog!);
+                        }
+                        if (mounted) Navigator.pop(context);
+                      },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF006B6B),
                   shape: RoundedRectangleBorder(
@@ -297,15 +301,25 @@ class _MemoryEditorSheetState extends State<_MemoryEditorSheet> {
                   ),
                   elevation: 0,
                 ),
-                child: Text(
-                  widget.existingLog == null
-                      ? "Commit to Memory"
-                      : "Update Memory",
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
+                child: _isSaving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : Text(
+                        widget.existingLog == null
+                            ? "Commit to Memory"
+                            : "Update Memory",
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
               ),
             ),
           ],
